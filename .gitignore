@@ -1,0 +1,15 @@
+node_modules/
+dist/
+build/
+.env
+.env.local
+docker-compose.override.yml
+*.log
+packages/orchestrator/prisma/dev.db
+packages/orchestrator/prisma/dev.db-journal
+srv/
+data/
+*.sqlite
+*.sqlite-journal
+*.tsbuildinfo
+.DS_Store
