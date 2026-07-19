@@ -1,0 +1,183 @@
+// Yuvomi Orchestrator — control-plane database.
+// This schema stores ONLY orchestrator state (tenants, admins, schedules,
+// logs). Each tenant's own Yuvomi data lives in its own SQLCipher database
+// on a dedicated volume — never in this database.
+//
+// SQLite has no native enum type, so the would-be enum columns below are
+// plain Strings constrained at the application layer — see
+// src/db/enums.ts for the canonical value sets and TS union types.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("ORCHESTRATOR_DB_URL")
+}
+
+model AdminUser {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String
+  totpSecret    String?
+  totpEnabled   Boolean  @default(false)
+  isSuperAdmin  Boolean  @default(false)
+  // First-login flow for the auto-bootstrapped default admin: the generated
+  // password is kept in plaintext ONLY so it can be re-printed to the
+  // container logs on every startup until it is changed; both fields are
+  // cleared atomically on the first password change (see src/auth/bootstrap.ts).
+  mustChangePassword Boolean @default(false)
+  initialPassword    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  credentials   WebAuthnCredential[]
+  sessions      AdminSession[]
+  auditLogs     AuditLog[]
+}
+
+model WebAuthnCredential {
+  id              String   @id @default(cuid())
+  adminUserId     String
+  credentialId    String   @unique
+  publicKey       Bytes
+  counter         Int      @default(0)
+  transports      String? // comma-separated
+  deviceLabel     String?
+  createdAt       DateTime @default(now())
+  lastUsedAt      DateTime?
+
+  adminUser       AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId])
+}
+
+model AdminSession {
+  id           String   @id @default(cuid())
+  tokenHash    String   @unique
+  adminUserId  String
+  userAgent    String?
+  ip           String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  adminUser    AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId])
+}
+
+model Tenant {
+  id             String    @id @default(cuid())
+  name           String
+  subdomain      String    @unique
+  // TenantStatus: PROVISIONING | RUNNING | PAUSED | UNHEALTHY | STOPPED | DELETING
+  status         String    @default("PROVISIONING")
+  containerId    String?
+  containerName  String    @unique
+  image          String
+  imageTag       String
+  dataPath       String    @unique
+  network        String
+  contactName    String
+  contactEmail   String?
+  contactPhone   String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  secrets        TenantSecret?
+  invites        Invite[]
+  schedules      Schedule[]
+  backupLogs     BackupLog[]
+
+  @@index([status])
+}
+
+// Secrets are written once at provisioning time and injected into the
+// container via env file on disk (mode 0600), not via `docker inspect`-able
+// env vars. This table lets the orchestrator rotate/recreate containers
+// without re-deriving secrets. In production, back this with a KMS/vault
+// and store only a reference here instead of the raw value.
+model TenantSecret {
+  id               String   @id @default(cuid())
+  tenantId         String   @unique
+  dbEncryptionKey  String
+  sessionSecret    String
+  createdAt        DateTime @default(now())
+  rotatedAt        DateTime?
+
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model Invite {
+  id            String    @id @default(cuid())
+  tenantId      String
+  // InviteChannel: EMAIL | WHATSAPP
+  channel       String
+  contactEmail  String?
+  contactPhone  String?
+  tokenHash     String    @unique
+  expiresAt     DateTime
+  usedAt        DateTime?
+  createdAt     DateTime  @default(now())
+
+  tenant        Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model Schedule {
+  id              String    @id @default(cuid())
+  tenantId        String?   // null = applies to all tenants
+  // ScheduleType: UPDATE | RESTART
+  type            String
+  targetImage     String?
+  cronExpression  String?   // recurring
+  runAt           DateTime? // one-off
+  // ScheduleStatus: PENDING | RUNNING | SUCCESS | FAILED | CANCELLED
+  status          String    @default("PENDING")
+  lastRunAt       DateTime?
+  lastError       String?
+  createdAt       DateTime  @default(now())
+
+  tenant          Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([status])
+}
+
+model BackupLog {
+  id          String    @id @default(cuid())
+  tenantId    String
+  // BackupStatus: RUNNING | SUCCESS | FAILED
+  status      String    @default("RUNNING")
+  startedAt   DateTime  @default(now())
+  finishedAt  DateTime?
+  sizeBytes   Int?
+  filePath    String?
+  errorMessage String?
+
+  tenant      Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+// targetType/targetId form a polymorphic reference (Tenant, AdminUser,
+// Schedule, ...) and are intentionally NOT a foreign key — the target may
+// belong to any of several tables, and audit rows must survive even if the
+// target itself is later hard-deleted.
+model AuditLog {
+  id          String    @id @default(cuid())
+  actorId     String?
+  action      String
+  targetType  String
+  targetId    String?
+  metadata    String?   // JSON-encoded
+  createdAt   DateTime  @default(now())
+
+  actor       AdminUser? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([targetType, targetId])
+  @@index([actorId])
+}
