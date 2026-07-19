@@ -1,0 +1,21 @@
+# Exposes the Traefik dashboard at https://traefik.<ROOT_DOMAIN>/ behind
+# HTTP basic auth. Generate the htpasswd hash with:
+#   htpasswd -nB admin
+# and put the resulting `admin:$2y$...` line in TRAEFIK_DASHBOARD_AUTH in
+# your .env (docker-compose injects it via the TRAEFIK_DASHBOARD_AUTH_FILE
+# bind mount referenced below — see docker-compose.yml).
+http:
+  routers:
+    traefik-dashboard:
+      rule: "Host(`traefik.families.cloud`)"
+      service: api@internal
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: dns-wildcard
+      middlewares:
+        - dashboard-auth
+  middlewares:
+    dashboard-auth:
+      basicAuth:
+        usersFile: /etc/traefik/dynamic/dashboard-users.htpasswd

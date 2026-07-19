@@ -1,0 +1,36 @@
+# Routes for the orchestrator's own API and the admin UI. These used to be
+# discovered via Docker labels + Traefik's Docker provider; now that
+# Traefik has no Docker provider at all (see traefik.yml), they're static
+# file-provider entries instead. Container names/ports here must match the
+# `orchestrator` / `admin-ui` services in docker-compose.yml.
+#
+# Hosts are resolved via Traefik's Go templating (sprig `env`) from the
+# TRAEFIK_API_HOST / TRAEFIK_ADMIN_HOST environment variables set on the
+# traefik service in docker-compose.yml — which derives them from
+# ROOT_DOMAIN + API_SUBDOMAIN/ADMIN_SUBDOMAIN in .env. No manual editing
+# of this file is needed.
+http:
+  routers:
+    orchestrator-api:
+      rule: "Host(`{{ env "TRAEFIK_API_HOST" }}`)"
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: dns-wildcard
+      service: orchestrator-api
+    admin-ui:
+      rule: "Host(`{{ env "TRAEFIK_ADMIN_HOST" }}`)"
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: dns-wildcard
+      service: admin-ui
+  services:
+    orchestrator-api:
+      loadBalancer:
+        servers:
+          - url: "http://orchestrator:4000"
+    admin-ui:
+      loadBalancer:
+        servers:
+          - url: "http://admin-ui:80"

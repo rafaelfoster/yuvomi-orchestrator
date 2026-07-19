@@ -1,0 +1,38 @@
+# Static Traefik configuration. Nothing secret lives here — ACME email,
+# DNS provider selection, and provider credentials are passed as
+# environment/command-line values from docker-compose.yml so they can come
+# from .env without editing this file.
+#
+# Traefik has NO Docker provider and needs no Docker socket access at all.
+# The Docker Engine in this environment (29.x) raised its minimum
+# supported API version to 1.44 and hard-rejects anything below it with a
+# 400; Traefik's vendored Docker client always probes with the old
+# `/v1.24/version` first (confirmed against traefik:v3.1 through v3.5.6 —
+# this is not a version-pinning problem, there's no client-side override).
+# Tenant routing is handled entirely by the `file` provider instead: the
+# orchestrator writes/removes one YAML file per tenant under
+# providers.file.directory, which Traefik picks up live, no Docker API
+# involved. See src/docker/traefikRoute.ts.
+
+log:
+  level: INFO
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: ":443"
+
+providers:
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+api:
+  dashboard: true
+  insecure: false
