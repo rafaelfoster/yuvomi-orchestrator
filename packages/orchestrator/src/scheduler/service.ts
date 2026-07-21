@@ -3,7 +3,7 @@ import { prisma } from "../db/client.js";
 import { recordAudit } from "../audit.js";
 import { registerRecurringTask, unregisterTask } from "./registry.js";
 import { runSchedule } from "./runner.js";
-import type { Schedule } from "@prisma/client";
+import type { Schedule } from "../db/generated/client/client.js";
 import type { ScheduleType } from "../db/enums.js";
 
 export class ScheduleError extends Error {}

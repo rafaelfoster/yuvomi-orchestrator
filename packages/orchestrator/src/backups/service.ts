@@ -4,7 +4,7 @@ import { docker } from "../docker/client.js";
 import { prisma } from "../db/client.js";
 import { env } from "../config/env.js";
 import { recordAudit } from "../audit.js";
-import type { Tenant } from "@prisma/client";
+import type { Tenant } from "../db/generated/client/client.js";
 
 /**
  * Runs `sqlite3 <db> ".backup '<dest>'"` inside the tenant container via

@@ -5,7 +5,7 @@ import { recordAudit } from "../audit.js";
 import { sendInviteEmail } from "../notifications/smtp.js";
 import { sendInviteWhatsapp } from "../notifications/whatsapp.js";
 import { bootstrapTenantAdmin } from "./tenantAdminClient.js";
-import type { Invite } from "@prisma/client";
+import type { Invite } from "../db/generated/client/client.js";
 import type { InviteChannel } from "../db/enums.js";
 
 export class InviteError extends Error {

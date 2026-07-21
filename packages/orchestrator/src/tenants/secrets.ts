@@ -19,10 +19,19 @@ export function generateTenantSecrets(): TenantSecretValues {
 }
 
 /**
- * Writes the tenant's secrets/env file to disk with 0600 permissions.
- * This file is bind-mounted read-only into the tenant container; secrets
- * never pass through `docker create`'s Env array, so they never show up
- * in `docker inspect`.
+ * Writes the tenant's secrets/env file to disk. Bind-mounted read-only into
+ * the tenant container; secrets never pass through `docker create`'s Env
+ * array, so they never show up in `docker inspect`.
+ *
+ * Mode 0644, not 0600: the shipped Yuvomi image's entrypoint drops from
+ * root to a non-root `node` user before running the app (via `gosu`), and
+ * that user is a different uid than whatever wrote this file (typically
+ * root, from the orchestrator's own container) — 0600 would make the file
+ * unreadable to the app, so dotenv silently skips it and the app falls
+ * back to an unencrypted database with no session secret. The real access
+ * control here is the tenant root directory (0700, root-owned, created
+ * below) — nothing outside this host's root/orchestrator can reach the
+ * file to read it regardless of its own mode.
  */
 export async function writeTenantEnvFile(
   envFilePath: string,
@@ -37,6 +46,6 @@ export async function writeTenantEnvFile(
     ...Object.entries(extra).map(([key, value]) => `${key}=${value}`),
   ];
 
-  await writeFile(envFilePath, lines.join("\n") + "\n", { mode: 0o600 });
-  await chmod(envFilePath, 0o600);
+  await writeFile(envFilePath, lines.join("\n") + "\n", { mode: 0o644 });
+  await chmod(envFilePath, 0o644);
 }

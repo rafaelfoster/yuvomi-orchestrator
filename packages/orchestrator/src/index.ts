@@ -9,12 +9,38 @@ import { errorHandler } from "./middleware/errorHandler.js";
 import { initScheduler } from "./scheduler/cron.js";
 import { ensureAdminBootstrap } from "./auth/bootstrap.js";
 
-const logger = pino({ name: "orchestrator", level: env.NODE_ENV === "development" ? "debug" : "info" });
+const logger = pino({ name: "orchestrator", level: env.ORCHESTRATOR_LOG_LEVEL });
+
+// WEBAUTHN_ORIGIN always allowed (it's the deployed admin console); extra
+// origins (local dev servers, alternate hosts) come from
+// CORS_ALLOWED_ORIGINS. Kept as a Set + origin callback, not a static
+// string, because cors() only ever echoes back a single Access-Control-
+// Allow-Origin value — it can't return "one of several" any other way.
+const allowedOrigins = new Set(
+  [env.WEBAUTHN_ORIGIN, ...env.CORS_ALLOWED_ORIGINS.split(",")].map((o) => o.trim()).filter(Boolean),
+);
 
 const app = express();
 app.disable("x-powered-by");
-app.use(pinoHttp({ logger }));
-app.use(cors({ origin: env.WEBAUTHN_ORIGIN, credentials: true }));
+app.use(
+  pinoHttp({
+    logger,
+    customLogLevel(_req, res, err) {
+      if (err || res.statusCode >= 500) return "error";
+      return "debug";
+    },
+  }),
+);
+app.use(
+  cors({
+    origin(origin, callback) {
+      // No Origin header (curl, server-to-server, same-origin) — allow.
+      if (!origin || allowedOrigins.has(origin)) return callback(null, true);
+      callback(new Error(`origin not allowed: ${origin}`));
+    },
+    credentials: true,
+  }),
+);
 app.use(express.json());
 app.use(cookieParser());
 

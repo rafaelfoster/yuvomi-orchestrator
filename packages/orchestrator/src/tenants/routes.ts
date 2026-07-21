@@ -11,6 +11,7 @@ import {
   resumeTenant,
   updateTenantImage,
 } from "./service.js";
+import { PasswordResetError, resetTenantAdminPassword } from "./passwordReset.js";
 import { inspectTenantContainer } from "../docker/inspect.js";
 import { streamTenantLogs } from "../docker/logs.js";
 import { requireAuth } from "../middleware/requireAuth.js";
@@ -111,6 +112,28 @@ tenantsRouter.post("/:id/image", async (req: AuthedRequest, res) => {
     res.json(await updateTenantImage(req.params.id, parsed.data, req.admin?.id));
   } catch (err) {
     if (!handleTenantError(err, res)) throw err;
+  }
+});
+
+const resetPasswordSchema = z.object({
+  username: z.string().min(1),
+  newPassword: z.string().min(8),
+});
+
+tenantsRouter.post("/:id/reset-admin-password", async (req: AuthedRequest, res) => {
+  const parsed = resetPasswordSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  try {
+    const tenant = await getTenant(req.params.id);
+    await resetTenantAdminPassword(tenant, parsed.data.username, parsed.data.newPassword, req.admin?.id);
+    res.json({ ok: true });
+  } catch (err) {
+    if (handleTenantError(err, res)) return;
+    if (err instanceof PasswordResetError) {
+      return res.status(err.code === "USER_NOT_FOUND" ? 404 : 502).json({ error: err.message, code: err.code });
+    }
+    throw err;
   }
 });
 

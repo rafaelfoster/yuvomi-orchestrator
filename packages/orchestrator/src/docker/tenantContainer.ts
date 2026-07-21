@@ -36,6 +36,18 @@ export async function createTenantContainer(spec: TenantContainerSpec): Promise<
     name: spec.containerName,
     Image: ref,
     Labels: buildManagedLabels({ tenantId: spec.tenantId }),
+    // The shipped image's own baked-in CMD is just ["node",
+    // "server/index.js"] — no dotenv preload — even though its
+    // package.json "start" script (never actually invoked by the image)
+    // is "node --import dotenv/config server/index.js". Without this
+    // override the bind-mounted .env file (DB_PATH, DB_ENCRYPTION_KEY,
+    // SESSION_SECRET, ...) is silently never read: dotenv is simply never
+    // loaded, regardless of the file's path, contents, or permissions.
+    // Confirmed by extracting the image's package.json and comparing
+    // against `docker inspect`'s Config.Cmd. Matches their own start
+    // script exactly so this stays correct across image updates as long
+    // as that script does.
+    Cmd: ["node", "--import", "dotenv/config", "server/index.js"],
     HostConfig: {
       Binds: [
         `${spec.dataPath}:${env.TENANT_DATA_MOUNT_PATH}:rw`,
@@ -49,7 +61,18 @@ export async function createTenantContainer(spec: TenantContainerSpec): Promise<
       SecurityOpt: ["no-new-privileges"],
     },
     Healthcheck: {
-      Test: ["CMD-SHELL", `wget -qO- http://localhost:${env.TENANT_APP_PORT}/ || exit 1`],
+      // NOT wget: the shipped image has no wget (and no curl) on PATH —
+      // confirmed via `docker exec ... which wget` → "not found". A
+      // wget-based check fails 100% of the time with "wget: not found",
+      // which Docker reports as HEALTHCHECK failure (exit 1, not "command
+      // not found" surfaced any other way) — so health was permanently
+      // "unhealthy" regardless of the app's real state. Using Node's
+      // built-in fetch instead: guaranteed present, since this is what
+      // runs the app itself.
+      Test: [
+        "CMD-SHELL",
+        `node -e "fetch('http://localhost:${env.TENANT_APP_PORT}/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"`,
+      ],
       Interval: 30_000_000_000, // 30s in ns
       Timeout: 5_000_000_000,
       Retries: 3,

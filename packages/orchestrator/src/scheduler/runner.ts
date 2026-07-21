@@ -2,7 +2,7 @@ import { prisma } from "../db/client.js";
 import { recordAudit } from "../audit.js";
 import { updateTenantImage } from "../tenants/service.js";
 import { startTenantContainer, stopTenantContainer } from "../docker/tenantContainer.js";
-import type { Schedule, Tenant } from "@prisma/client";
+import type { Schedule, Tenant } from "../db/generated/client/client.js";
 
 export function splitImageRef(ref: string): { image: string; imageTag: string } {
   const lastSlash = ref.lastIndexOf("/");

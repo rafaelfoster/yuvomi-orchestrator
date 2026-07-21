@@ -3,6 +3,7 @@ import pino from "pino";
 import { prisma } from "../db/client.js";
 import { env } from "../config/env.js";
 import { runBackupForAllTenants } from "../backups/service.js";
+import { fetchAndStoreReleases } from "../releases/service.js";
 import { registerRecurringTask } from "./registry.js";
 import { runSchedule } from "./runner.js";
 
@@ -37,4 +38,10 @@ export async function initScheduler(): Promise<void> {
     runBackupForAllTenants().catch((err) => logger.error({ err }, "nightly backup run failed"));
   });
   logger.info({ cron: env.BACKUP_CRON }, "backup cron registered");
+
+  fetchAndStoreReleases().catch((err) => logger.error({ err }, "initial release fetch failed"));
+  cron.schedule(env.RELEASES_POLL_CRON, () => {
+    fetchAndStoreReleases().catch((err) => logger.error({ err }, "release poll failed"));
+  });
+  logger.info({ cron: env.RELEASES_POLL_CRON, repo: env.RELEASES_GITHUB_REPO }, "release poll cron registered");
 }

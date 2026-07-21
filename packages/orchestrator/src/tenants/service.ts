@@ -5,6 +5,7 @@ import { prisma } from "../db/client.js";
 import { env } from "../config/env.js";
 import { recordAudit } from "../audit.js";
 import { generateTenantSecrets, writeTenantEnvFile } from "./secrets.js";
+import { inheritedSmtpEnv } from "./smtpDefaults.js";
 import {
   createTenantContainer,
   removeTenantContainer,
@@ -15,7 +16,7 @@ import {
 } from "../docker/tenantContainer.js";
 import { inspectTenantContainer } from "../docker/inspect.js";
 import { removeTenantRoute, writeTenantRoute } from "../docker/traefikRoute.js";
-import type { Tenant } from "@prisma/client";
+import type { Tenant } from "../db/generated/client/client.js";
 import type { TenantStatus } from "../db/enums.js";
 
 export class TenantError extends Error {
@@ -112,7 +113,19 @@ export async function provisionTenant(input: ProvisionTenantInput): Promise<Tena
       sessionSecret: secrets.sessionSecret,
     },
   });
-  await writeTenantEnvFile(envFilePath, secrets, { NODE_ENV: "production" });
+  // DB_PATH set explicitly: unset, Yuvomi defaults to "<app-root>/yuvomi.db"
+  // (i.e. inside /app, not the mounted volume) — root-owned and unwritable
+  // by the non-root user its entrypoint drops to, which crashes with
+  // SQLITE_CANTOPEN. Confirmed against the shipped image's server/db.js.
+  const dbPath = `${env.TENANT_DATA_MOUNT_PATH}/${env.TENANT_DB_FILENAME}`;
+  await writeTenantEnvFile(envFilePath, secrets, {
+    NODE_ENV: "production",
+    DB_PATH: dbPath,
+    // Defaults the new family to the orchestrator's own SMTP relay; they
+    // can still override/reconfigure it from inside Yuvomi's own settings
+    // UI afterward — env only wins over Yuvomi's DB-stored config when set.
+    ...inheritedSmtpEnv(),
+  });
 
   try {
     const containerId = await createTenantContainer(toSpec(tenant));

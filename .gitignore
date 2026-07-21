@@ -13,3 +13,5 @@ data/
 *.sqlite-journal
 *.tsbuildinfo
 .DS_Store
+infra/traefik/dynamic/dashboard-users.htpasswd
+packages/orchestrator/src/db/generated/

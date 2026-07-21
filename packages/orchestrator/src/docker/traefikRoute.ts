@@ -37,7 +37,7 @@ http:
       entryPoints:
         - websecure
       tls:
-        certResolver: dns-wildcard
+        certResolver: dnswildcard
       service: ${router}
   services:
     ${router}:

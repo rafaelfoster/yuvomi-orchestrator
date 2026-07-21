@@ -1,6 +1,6 @@
 import axios from "axios";
 import { env } from "../config/env.js";
-import type { Tenant } from "@prisma/client";
+import type { Tenant } from "../db/generated/client/client.js";
 
 /**
  * Yuvomi's own source code is never modified, so promoting the invited

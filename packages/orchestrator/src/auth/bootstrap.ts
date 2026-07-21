@@ -57,9 +57,21 @@ export async function ensureAdminBootstrap(logger: Logger): Promise<void> {
 
   const pending = await prisma.adminUser.findMany({
     where: { mustChangePassword: true, initialPassword: { not: null } },
-    select: { email: true, initialPassword: true },
+    select: { id: true, email: true, initialPassword: true, passwordHash: true },
   });
   for (const admin of pending) {
-    if (admin.initialPassword) printCredentialsBanner(admin.email, admin.initialPassword);
+    if (admin.initialPassword) {
+      // Defense-in-depth: make sure the password hash actually matches the printed initial password!
+      const matches = await bcrypt.compare(admin.initialPassword, admin.passwordHash);
+      if (!matches) {
+        logger.warn({ email: admin.email }, "Initial password hash mismatch — regenerating hash to match printed password");
+        const newHash = await bcrypt.hash(admin.initialPassword, 12);
+        await prisma.adminUser.update({
+          where: { id: admin.id },
+          data: { passwordHash: newHash },
+        });
+      }
+      printCredentialsBanner(admin.email, admin.initialPassword);
+    }
   }
 }
