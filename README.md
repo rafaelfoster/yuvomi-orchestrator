@@ -121,7 +121,7 @@ npm run dev:orchestrator   # tsx watch, http://localhost:4000
 npm run dev:admin-ui       # vite dev server, http://localhost:5173
 ```
 
-You'll still need a `.env` at the repo root (see above) — `src/config/env.ts` validates it eagerly and exits if anything required is missing. For local-only work, `ORCHESTRATOR_DB_URL=file:../data/orchestrator.db` (SQLite) means no external database to stand up; Docker/Traefik pieces aren't required unless you're testing actual tenant provisioning.
+You'll still need a `.env` at the repo root (see above) — `src/config/env.ts` validates it eagerly and exits if anything required is missing. For local-only work, `ORCHESTRATOR_DB_URL=file:./data/orchestrator.db` (SQLite) means no external database to stand up; Docker/Traefik pieces aren't required unless you're testing actual tenant provisioning.
 
 ### Database migrations
 
