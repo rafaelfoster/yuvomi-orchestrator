@@ -8,12 +8,12 @@
 // src/db/enums.ts for the canonical value sets and TS union types.
 
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "../src/db/generated/client"
 }
 
 datasource db {
   provider = "sqlite"
-  url      = env("ORCHESTRATOR_DB_URL")
 }
 
 model AdminUser {

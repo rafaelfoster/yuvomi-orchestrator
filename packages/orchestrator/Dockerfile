@@ -20,6 +20,7 @@ ENV NODE_ENV=production
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/packages/orchestrator/dist ./packages/orchestrator/dist
 COPY --from=build /app/packages/orchestrator/prisma ./packages/orchestrator/prisma
+COPY --from=build /app/packages/orchestrator/prisma.config.ts ./packages/orchestrator/prisma.config.ts
 COPY packages/orchestrator/package.json ./packages/orchestrator/package.json
 
 WORKDIR /app/packages/orchestrator
