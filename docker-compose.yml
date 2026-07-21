@@ -87,6 +87,7 @@ services:
       - tenant_routes:/etc/traefik/dynamic
       - ./infra/traefik/dynamic/wildcard-cert.yml:/etc/traefik/dynamic/wildcard-cert.yml:ro
       - ./infra/traefik/dynamic/dashboard.yml:/etc/traefik/dynamic/dashboard.yml:ro
+      - ./infra/traefik/dynamic/dashboard-users.htpasswd:/etc/traefik/dynamic/dashboard-users.htpasswd:ro
       - ./infra/traefik/dynamic/core-services.yml:/etc/traefik/dynamic/core-services.yml:ro
       - traefik_acme:/letsencrypt
     environment:
@@ -103,11 +104,12 @@ services:
       TRAEFIK_ROOT_DOMAIN: ${ROOT_DOMAIN}
       TRAEFIK_ADMIN_HOST: ${ADMIN_SUBDOMAIN:-admin}.${ROOT_DOMAIN}
       TRAEFIK_API_HOST: ${API_SUBDOMAIN:-api}.${ROOT_DOMAIN}
+      TRAEFIK_DASHBOARD_HOST: ${TRAEFIK_SUBDOMAIN:-traefik}.${ROOT_DOMAIN}
     command:
-      - --certificatesresolvers.dns-wildcard.acme.email=${ACME_EMAIL}
-      - --certificatesresolvers.dns-wildcard.acme.storage=/letsencrypt/acme.json
-      - --certificatesresolvers.dns-wildcard.acme.dnschallenge=true
-      - --certificatesresolvers.dns-wildcard.acme.dnschallenge.provider=${DNS_PROVIDER:-cloudflare}
+      - --certificatesresolvers.dnswildcard.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.dnswildcard.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.dnswildcard.acme.dnschallenge=true
+      - --certificatesresolvers.dnswildcard.acme.dnschallenge.provider=${DNS_PROVIDER:-cloudflare}
 
   # --- Orchestrator control plane -----------------------------------------
 
@@ -143,7 +145,7 @@ services:
       context: .
       dockerfile: packages/admin-ui/Dockerfile
       args:
-        VITE_API_BASE_URL: https://${API_SUBDOMAIN:-api}.${ROOT_DOMAIN}/api
+        VITE_API_BASE_URL: /api
     restart: unless-stopped
     networks:
       - yuvomi_edge

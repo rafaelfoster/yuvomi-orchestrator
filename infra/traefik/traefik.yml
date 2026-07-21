@@ -1,7 +1,4 @@
-# Static Traefik configuration. Nothing secret lives here — ACME email,
-# DNS provider selection, and provider credentials are passed as
-# environment/command-line values from docker-compose.yml so they can come
-# from .env without editing this file.
+# Static Traefik configuration.
 #
 # Traefik has NO Docker provider and needs no Docker socket access at all.
 # The Docker Engine in this environment (29.x) raised its minimum
@@ -36,3 +33,14 @@ providers:
 api:
   dashboard: true
   insecure: false
+
+certificatesResolvers:
+  dnswildcard:
+    acme:
+      # Must be a syntactically valid e-mail for ACME account registration.
+      # This static file is not env-expanded by Traefik, so keep a safe
+      # default here instead of ${ACME_EMAIL}.
+      email: admin@families.cloud
+      storage: /letsencrypt/acme.json
+      dnsChallenge:
+        provider: cloudflare

@@ -1,7 +1,7 @@
 # Forces Traefik to request ONE wildcard certificate (*.ROOT_DOMAIN)
 # up front via `noop@internal` — a built-in Traefik service that accepts
 # the router match but never actually serves traffic. Every tenant router
-# then just references `certresolver: dns-wildcard` (see
+# then just references `certresolver: dnswildcard` (see
 # src/docker/traefikRoute.ts) and Traefik reuses this cert by SAN match
 # instead of requesting a new one per subdomain.
 #
@@ -11,11 +11,11 @@
 http:
   routers:
     wildcard-cert-bootstrap:
-      rule: "HostRegexp(`{host:.+}`)"
+      rule: "Host(`{{ env "TRAEFIK_ROOT_DOMAIN" }}`)"
       service: noop@internal
       priority: 1
       tls:
-        certResolver: dns-wildcard
+        certResolver: dnswildcard
         domains:
           - main: "{{ env "TRAEFIK_ROOT_DOMAIN" }}"
             sans:

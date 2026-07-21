@@ -16,14 +16,14 @@ http:
       entryPoints:
         - websecure
       tls:
-        certResolver: dns-wildcard
+        certResolver: dnswildcard
       service: orchestrator-api
     admin-ui:
       rule: "Host(`{{ env "TRAEFIK_ADMIN_HOST" }}`)"
       entryPoints:
         - websecure
       tls:
-        certResolver: dns-wildcard
+        certResolver: dnswildcard
       service: admin-ui
   services:
     orchestrator-api:

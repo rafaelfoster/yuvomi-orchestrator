@@ -1,0 +1,151 @@
+name: yuvomi-orchestrator
+
+networks:
+  # Public-facing network: Traefik, the orchestrator API, the admin UI,
+  # AND every tenant container (tenant containers just need to be
+  # reachable by name — see src/docker/traefikRoute.ts). Must match
+  # TENANT_NETWORK in .env.
+  yuvomi_edge:
+    name: ${TENANT_NETWORK:-yuvomi_edge}
+    driver: bridge
+  # Internal-only network carrying Docker API traffic between the
+  # orchestrator and its docker-socket-proxy instance. Traefik has no
+  # Docker access at all — see infra/traefik/traefik.yml for why — so it
+  # never joins this network.
+  yuvomi_control:
+    driver: bridge
+    internal: true
+
+volumes:
+  traefik_acme:
+  orchestrator_db:
+  # Shared between orchestrator (writes) and traefik (reads): the whole
+  # dynamic-config directory. One route file per tenant is written/removed
+  # here by src/docker/traefikRoute.ts and picked up live by Traefik's file
+  # provider — it must be this exact flat directory, not a subdirectory of
+  # it, or Traefik's watch stops reacting to live changes (confirmed
+  # empirically). The static *.yml files are layered on top via individual
+  # bind mounts on the traefik service below.
+  tenant_routes:
+
+services:
+  # --- Docker socket proxy (Tecnativa) ------------------------------------
+  # The orchestrator never mounts /var/run/docker.sock directly — only
+  # this proxy does, scoped to the minimum set of Docker API endpoints
+  # tenant lifecycle management actually needs.
+
+  docker-socket-proxy-orchestrator:
+    image: tecnativa/docker-socket-proxy:latest
+    restart: unless-stopped
+    networks:
+      - yuvomi_control
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      # Exactly what tenant lifecycle management needs: list/inspect/
+      # create/start/stop/remove containers, pull images, exec (for
+      # sqlite backups). No swarm, no secrets, no plugins, no host
+      # networking changes.
+      CONTAINERS: 1
+      POST: 1
+      IMAGES: 1
+      NETWORKS: 1
+      EXEC: 1
+      VOLUMES: 0
+      INFO: 1
+      PING: 1
+      VERSION: 1
+      SERVICES: 0
+      TASKS: 0
+      SWARM: 0
+      SYSTEM: 0
+      SECRETS: 0
+      NODES: 0
+      PLUGINS: 0
+      SESSION: 0
+      DISTRIBUTION: 0
+      BUILD: 0
+
+  # --- Reverse proxy ------------------------------------------------------
+  # No Docker provider, no Docker socket access at all. Routing comes
+  # entirely from infra/traefik/dynamic/*.yml (static + per-tenant files
+  # written by the orchestrator). See infra/traefik/traefik.yml for why.
+
+  traefik:
+    image: traefik:v3.5
+    restart: unless-stopped
+    networks:
+      - yuvomi_edge
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      # tenant_routes mounted first (whole directory), then the static
+      # files layered on top as individual bind mounts — Docker resolves
+      # the more specific paths on top of the broader volume mount.
+      - tenant_routes:/etc/traefik/dynamic
+      - ./infra/traefik/dynamic/wildcard-cert.yml:/etc/traefik/dynamic/wildcard-cert.yml:ro
+      - ./infra/traefik/dynamic/dashboard.yml:/etc/traefik/dynamic/dashboard.yml:ro
+      - ./infra/traefik/dynamic/dashboard-users.htpasswd:/etc/traefik/dynamic/dashboard-users.htpasswd:ro
+      - ./infra/traefik/dynamic/core-services.yml:/etc/traefik/dynamic/core-services.yml:ro
+      - traefik_acme:/letsencrypt
+    environment:
+      # Lego (Traefik's ACME client) reads DNS provider credentials
+      # directly from the environment. Var names are provider-specific —
+      # CF_DNS_API_TOKEN/CF_API_EMAIL below match DNS_PROVIDER=cloudflare.
+      # See https://go-acme.github.io/lego/dns/ for other providers.
+      CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN:-}
+      CF_API_EMAIL: ${CF_API_EMAIL:-}
+      # Hosts for the core routers. Consumed inside the dynamic config
+      # files (core-services.yml / wildcard-cert.yml) via Traefik's Go
+      # templating (`{{ env "..." }}`) — this is where the admin console
+      # and API subdomains are actually defined.
+      TRAEFIK_ROOT_DOMAIN: ${ROOT_DOMAIN}
+      TRAEFIK_ADMIN_HOST: ${ADMIN_SUBDOMAIN:-admin}.${ROOT_DOMAIN}
+      TRAEFIK_API_HOST: ${API_SUBDOMAIN:-api}.${ROOT_DOMAIN}
+      TRAEFIK_DASHBOARD_HOST: ${TRAEFIK_SUBDOMAIN:-traefik}.${ROOT_DOMAIN}
+    command:
+      - --certificatesresolvers.dnswildcard.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.dnswildcard.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.dnswildcard.acme.dnschallenge=true
+      - --certificatesresolvers.dnswildcard.acme.dnschallenge.provider=${DNS_PROVIDER:-cloudflare}
+
+  # --- Orchestrator control plane -----------------------------------------
+
+  orchestrator:
+    build:
+      context: .
+      dockerfile: packages/orchestrator/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - docker-socket-proxy-orchestrator
+    networks:
+      - yuvomi_edge
+      - yuvomi_control
+    env_file:
+      - .env
+    environment:
+      DOCKER_SOCKET_PROXY_HOST: docker-socket-proxy-orchestrator
+      DOCKER_SOCKET_PROXY_PORT: 2375
+    volumes:
+      - orchestrator_db:/app/packages/orchestrator/data
+      - tenant_routes:/etc/traefik/dynamic
+      # Bind mount at the SAME path inside this container as on the host:
+      # the orchestrator writes tenant data dirs/.env files here via Node
+      # fs calls, then asks the Docker daemon (on the host) to bind-mount
+      # those exact host paths into tenant containers. Path parity is
+      # required for that hand-off to work (Docker-outside-of-Docker).
+      - ${TENANT_DATA_ROOT:-/srv/yuvomi/tenants}:${TENANT_DATA_ROOT:-/srv/yuvomi/tenants}
+
+  # --- Admin console frontend ---------------------------------------------
+
+  admin-ui:
+    build:
+      context: .
+      dockerfile: packages/admin-ui/Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+    restart: unless-stopped
+    networks:
+      - yuvomi_edge
