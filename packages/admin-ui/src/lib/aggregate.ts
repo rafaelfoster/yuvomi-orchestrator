@@ -32,7 +32,7 @@ export function tenantGrowthSeries(tenants: Tenant[], days = 30): TimePoint[] {
   return points;
 }
 
-export function statusDistribution(tenants: Tenant[]): DonutSlice[] {
+export function statusDistribution(tenants: Tenant[], translate: (key: string, fallback: string) => string): DonutSlice[] {
   const order = ["RUNNING", "PROVISIONING", "PAUSED", "UNHEALTHY", "STOPPED", "DELETING"];
   const counts = new Map<string, number>();
   for (const tenant of tenants) {
@@ -42,7 +42,7 @@ export function statusDistribution(tenants: Tenant[]): DonutSlice[] {
     .filter((status) => counts.has(status))
     .map((status) => {
       const meta = statusMeta(status);
-      return { key: status, label: meta.label, value: counts.get(status) ?? 0, color: meta.color };
+      return { key: status, label: translate(`status.${status}`, meta.label), value: counts.get(status) ?? 0, color: meta.color };
     });
 }
 
@@ -53,7 +53,11 @@ export function allBackups(backups: TenantBackups[]): Array<BackupLog & { tenant
 }
 
 /** Backups per day (success vs failed) over the trailing window. */
-export function backupsPerDay(backups: TenantBackups[], days = 14): StackedBarDatum[] {
+export function backupsPerDay(
+  backups: TenantBackups[],
+  translate: (key: string, fallback: string) => string,
+  days = 14,
+): StackedBarDatum[] {
   const today = startOfDay(new Date());
   const flat = allBackups(backups);
   const result: StackedBarDatum[] = [];
@@ -73,8 +77,8 @@ export function backupsPerDay(backups: TenantBackups[], days = 14): StackedBarDa
       key: day.toISOString(),
       label: formatDate(day.toISOString()),
       segments: [
-        { key: "success", label: "Sucesso", value: success, color: "#34d399" },
-        { key: "failed", label: "Falhas", value: failed, color: "#f87171" },
+        { key: "success", label: translate("status.SUCCESS", "Success"), value: success, color: "#34d399" },
+        { key: "failed", label: translate("status.FAILED", "Failed"), value: failed, color: "#f87171" },
       ],
     });
   }

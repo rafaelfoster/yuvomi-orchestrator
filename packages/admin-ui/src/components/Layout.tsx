@@ -1,15 +1,20 @@
+import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "../auth/AuthContext";
 import { IconBolt, IconClock, IconGrid, IconLogout, IconUsers } from "./icons";
-
-const navItems = [
-  { to: "/", label: "Visão geral", icon: IconGrid, end: true },
-  { to: "/tenants", label: "Famílias", icon: IconUsers, end: false },
-  { to: "/schedules", label: "Agendamentos", icon: IconClock, end: false },
-];
+import { UserSettingsModal } from "./UserSettingsModal";
 
 export function Layout() {
+  const { t } = useTranslation();
   const { admin, logout } = useAuth();
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const navItems = [
+    { to: "/", label: t("layout.overview"), icon: IconGrid, end: true },
+    { to: "/tenants", label: t("layout.families"), icon: IconUsers, end: false },
+    { to: "/schedules", label: t("layout.schedules"), icon: IconClock, end: false },
+  ];
 
   return (
     <div className="flex min-h-screen">
@@ -20,11 +25,11 @@ export function Layout() {
           </div>
           <div>
             <p className="font-display text-sm font-bold tracking-tight text-white">Yuvomi</p>
-            <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-slate-500">Orchestrator</p>
+            <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-slate-500">{t("layout.brand")}</p>
           </div>
         </div>
 
-        <nav className="mt-2 flex-1 space-y-1 px-3" aria-label="Navegação principal">
+        <nav className="mt-2 flex-1 space-y-1 px-3" aria-label={t("layout.overview")}>
           {navItems.map((item) => (
             <NavLink
               key={item.to}
@@ -46,17 +51,24 @@ export function Layout() {
 
         <div className="border-t border-white/[0.06] p-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500/30 to-cyan-500/30 font-display text-xs font-bold uppercase text-white ring-1 ring-white/10">
-              {admin?.email?.slice(0, 2) ?? "?"}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-medium text-slate-300">{admin?.email}</p>
-              <p className="text-[10px] text-slate-600">{admin?.isSuperAdmin ? "Super admin" : "Admin"}</p>
-            </div>
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              title={t("userSettings.title")}
+              className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-1 text-left transition-colors hover:bg-white/[0.04]"
+            >
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500/30 to-cyan-500/30 font-display text-xs font-bold uppercase text-white ring-1 ring-white/10">
+                {admin?.email?.slice(0, 2) ?? "?"}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-medium text-slate-300">{admin?.email}</p>
+                <p className="text-[10px] text-slate-600">{admin?.isSuperAdmin ? t("layout.superAdmin") : t("layout.admin")}</p>
+              </div>
+            </button>
             <button
               onClick={() => logout()}
-              title="Sair"
-              aria-label="Sair"
+              title={t("layout.signOut")}
+              aria-label={t("layout.signOut")}
               className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-white/5 hover:text-red-400"
             >
               <IconLogout className="h-4 w-4" />
@@ -70,6 +82,8 @@ export function Layout() {
           <Outlet />
         </div>
       </main>
+
+      <UserSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }

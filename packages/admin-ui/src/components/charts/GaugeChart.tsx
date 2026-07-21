@@ -24,7 +24,7 @@ export function GaugeChart({ value, label, detail }: GaugeChartProps) {
   const clamped = Math.min(Math.max(value, 0), 1);
   const color = gaugeColor(clamped);
 
-  const size = Math.min(width, height * 1.4);
+  const size = Math.min(width, height * 1.4) * 0.9;
   const radius = size / 2;
 
   const track = arc()({

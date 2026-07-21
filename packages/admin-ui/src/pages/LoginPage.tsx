@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { authApi } from "../api/client";
 import { loginWithPasskey } from "../auth/webauthn";
 import { useAuth } from "../auth/AuthContext";
@@ -9,6 +10,7 @@ import { TotpEnrollment } from "../components/TotpEnrollment";
 type Step = "credentials" | "totp-verify" | "totp-setup";
 
 export function LoginPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { refresh } = useAuth();
 
@@ -38,7 +40,7 @@ export function LoginPage() {
         setSetupSecret(await authApi.totpSetup(result.pendingId));
       }
     } catch {
-      setError("Credenciais inválidas");
+      setError(t("auth.invalidCredentials"));
     } finally {
       setBusy(false);
     }
@@ -53,7 +55,7 @@ export function LoginPage() {
       await authApi.totpVerify(pendingId, totpToken);
       await afterLogin();
     } catch {
-      setError("Código inválido");
+      setError(t("auth.invalidCode"));
     } finally {
       setBusy(false);
     }
@@ -68,7 +70,7 @@ export function LoginPage() {
       await authApi.totpEnable(pendingId, totpToken);
       await afterLogin();
     } catch {
-      setError("Código inválido");
+      setError(t("auth.invalidCode"));
     } finally {
       setBusy(false);
     }
@@ -81,7 +83,7 @@ export function LoginPage() {
       await loginWithPasskey(email);
       await afterLogin();
     } catch {
-      setError("Falha na autenticação com passkey");
+      setError(t("auth.passkeyFailed"));
     } finally {
       setBusy(false);
     }
@@ -98,33 +100,33 @@ export function LoginPage() {
             <IconBolt className="h-6 w-6" />
           </div>
           <h1 className="font-display text-xl font-bold tracking-tight text-white">Yuvomi Orchestrator</h1>
-          <p className="mt-1 text-xs text-slate-500">Console administrativo da frota</p>
+          <p className="mt-1 text-xs text-slate-500">{t("auth.tagline")}</p>
         </div>
 
         {step === "credentials" && (
           <form onSubmit={handleCredentials} className="space-y-4">
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-slate-400">E-mail</label>
+              <label className="mb-1.5 block text-xs font-medium text-slate-400">{t("auth.emailLabel")}</label>
               <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="glass-input" />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-slate-400">Senha</label>
+              <label className="mb-1.5 block text-xs font-medium text-slate-400">{t("auth.passwordLabel")}</label>
               <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="glass-input" />
             </div>
             {error && <p className="text-sm text-red-400">{error}</p>}
             <button type="submit" disabled={busy} className="btn-primary w-full justify-center">
-              {busy ? "Entrando…" : "Entrar"}
+              {busy ? t("auth.signingIn") : t("auth.signIn")}
             </button>
             <button type="button" onClick={handlePasskey} disabled={busy || !email} className="btn-ghost w-full justify-center">
               <IconShield className="h-4 w-4" />
-              Entrar com Passkey
+              {t("auth.signInWithPasskey")}
             </button>
           </form>
         )}
 
         {step === "totp-verify" && (
           <form onSubmit={handleTotpVerify} className="space-y-4">
-            <p className="text-sm text-slate-400">Digite o código do seu autenticador (Google Authenticator/1Password).</p>
+            <p className="text-sm text-slate-400">{t("auth.totpPrompt")}</p>
             <input
               inputMode="numeric"
               maxLength={6}
@@ -136,17 +138,14 @@ export function LoginPage() {
             />
             {error && <p className="text-sm text-red-400">{error}</p>}
             <button type="submit" disabled={busy} className="btn-primary w-full justify-center">
-              {busy ? "Verificando…" : "Verificar"}
+              {busy ? t("auth.verifying") : t("auth.verify")}
             </button>
           </form>
         )}
 
         {step === "totp-setup" && (
           <form onSubmit={handleTotpEnable} className="space-y-4">
-            <p className="text-sm text-slate-400">
-              Configuração de MFA obrigatória. Escaneie o QR code no seu app autenticador (Google Authenticator,
-              1Password, Aegis…) e confirme com um código.
-            </p>
+            <p className="text-sm text-slate-400">{t("auth.totpSetupPrompt")}</p>
             {setupSecret && <TotpEnrollment otpauthUrl={setupSecret.otpauthUrl} secret={setupSecret.secret} />}
             <input
               inputMode="numeric"
@@ -159,7 +158,7 @@ export function LoginPage() {
             />
             {error && <p className="text-sm text-red-400">{error}</p>}
             <button type="submit" disabled={busy} className="btn-primary w-full justify-center">
-              {busy ? "Ativando…" : "Ativar MFA e entrar"}
+              {busy ? t("auth.enabling") : t("auth.enableAndSignIn")}
             </button>
           </form>
         )}

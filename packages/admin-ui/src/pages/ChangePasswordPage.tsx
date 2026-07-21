@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { authApi } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { extractApiError } from "../hooks/useFleetData";
@@ -8,6 +9,7 @@ import { IconShield } from "../components/icons";
 const MIN_PASSWORD_LENGTH = 12;
 
 export function ChangePasswordPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { admin, refresh, logout } = useAuth();
 
@@ -21,11 +23,11 @@ export function ChangePasswordPage() {
     e.preventDefault();
     setError(null);
     if (newPassword.length < MIN_PASSWORD_LENGTH) {
-      setError(`A nova senha precisa ter pelo menos ${MIN_PASSWORD_LENGTH} caracteres.`);
+      setError(t("changePassword.lengthError", { count: MIN_PASSWORD_LENGTH }));
       return;
     }
     if (newPassword !== confirmPassword) {
-      setError("A confirmação não confere com a nova senha.");
+      setError(t("changePassword.mismatchError"));
       return;
     }
     setBusy(true);
@@ -34,7 +36,7 @@ export function ChangePasswordPage() {
       await refresh();
       navigate("/", { replace: true });
     } catch (err) {
-      setError(extractApiError(err, "Falha ao alterar a senha"));
+      setError(extractApiError(err, t("changePassword.genericError")));
     } finally {
       setBusy(false);
     }
@@ -50,16 +52,15 @@ export function ChangePasswordPage() {
           <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 text-ink-950">
             <IconShield className="h-6 w-6" />
           </div>
-          <h1 className="font-display text-xl font-bold tracking-tight text-white">Defina uma nova senha</h1>
+          <h1 className="font-display text-xl font-bold tracking-tight text-white">{t("changePassword.title")}</h1>
           <p className="mt-1 text-xs text-slate-500">
-            A senha inicial gerada para <span className="text-slate-300">{admin?.email}</span> precisa ser trocada antes
-            de continuar.
+            {t("changePassword.subtitle", { email: admin?.email ?? "" })}
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-slate-400">Senha atual</label>
+            <label className="mb-1.5 block text-xs font-medium text-slate-400">{t("changePassword.currentPassword")}</label>
             <input
               type="password"
               required
@@ -72,7 +73,7 @@ export function ChangePasswordPage() {
           </div>
           <div>
             <label className="mb-1.5 block text-xs font-medium text-slate-400">
-              Nova senha (mínimo {MIN_PASSWORD_LENGTH} caracteres)
+              {t("changePassword.newPassword", { count: MIN_PASSWORD_LENGTH })}
             </label>
             <input
               type="password"
@@ -84,7 +85,7 @@ export function ChangePasswordPage() {
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-slate-400">Confirmar nova senha</label>
+            <label className="mb-1.5 block text-xs font-medium text-slate-400">{t("changePassword.confirmPassword")}</label>
             <input
               type="password"
               required
@@ -96,10 +97,10 @@ export function ChangePasswordPage() {
           </div>
           {error && <p className="text-sm text-red-400">{error}</p>}
           <button type="submit" disabled={busy} className="btn-primary w-full justify-center">
-            {busy ? "Salvando…" : "Salvar nova senha"}
+            {busy ? t("changePassword.saving") : t("changePassword.save")}
           </button>
           <button type="button" onClick={() => logout()} className="btn-ghost w-full justify-center">
-            Sair
+            {t("changePassword.logout")}
           </button>
         </form>
       </div>

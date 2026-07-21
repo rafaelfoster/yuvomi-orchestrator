@@ -1,8 +1,10 @@
+import { useTranslation } from "react-i18next";
 import { statusMeta } from "../lib/status";
 
 const LIVE_STATUSES = new Set(["RUNNING", "PROVISIONING", "DELETING"]);
 
 export function StatusBadge({ status }: { status: string }) {
+  const { t } = useTranslation();
   const meta = statusMeta(status);
   return (
     <span
@@ -12,7 +14,7 @@ export function StatusBadge({ status }: { status: string }) {
         className={`h-1.5 w-1.5 rounded-full ${LIVE_STATUSES.has(status) ? "animate-pulse-dot" : ""}`}
         style={{ backgroundColor: meta.color }}
       />
-      {meta.label}
+      {t(`status.${status}`, meta.label)}
     </span>
   );
 }

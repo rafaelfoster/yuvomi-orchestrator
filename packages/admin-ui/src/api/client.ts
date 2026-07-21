@@ -89,6 +89,8 @@ export const tenantsApi = {
     api.delete(`/tenants/${id}`, { params: { wipeData } }).then(() => undefined),
   updateImage: (id: string, image: string, imageTag: string) =>
     api.post<Tenant>(`/tenants/${id}/image`, { image, imageTag }).then((r) => r.data),
+  resetAdminPassword: (id: string, username: string, newPassword: string) =>
+    api.post(`/tenants/${id}/reset-admin-password`, { username, newPassword }).then(() => undefined),
   logsUrl: (id: string) => `${api.defaults.baseURL}/tenants/${id}/logs`,
 };
 
@@ -127,6 +129,17 @@ export interface AdminProfile {
   isSuperAdmin: boolean;
   mustChangePassword: boolean;
 }
+
+export interface ReleaseInfo {
+  tag: string;
+  name: string;
+  publishedAt: string;
+  prerelease: boolean;
+}
+
+export const releasesApi = {
+  list: () => api.get<{ fetchedAt: string; releases: ReleaseInfo[] }>("/releases").then((r) => r.data),
+};
 
 export const authApi = {
   login: (email: string, password: string) =>

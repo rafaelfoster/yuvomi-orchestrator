@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import QRCode from "qrcode";
 
 interface TotpEnrollmentProps {
@@ -12,6 +13,7 @@ function formatSecret(secret: string): string {
 }
 
 export function TotpEnrollment({ otpauthUrl, secret }: TotpEnrollmentProps) {
+  const { t } = useTranslation();
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [qrError, setQrError] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -51,20 +53,20 @@ export function TotpEnrollment({ otpauthUrl, secret }: TotpEnrollmentProps) {
         {qrDataUrl ? (
           <img
             src={qrDataUrl}
-            alt="QR code para configurar o autenticador"
+            alt={t("totpEnrollment.qrAlt")}
             width={180}
             height={180}
             className="rounded-xl bg-white p-1.5"
           />
         ) : qrError ? (
-          <p className="text-xs text-red-400">Não foi possível gerar o QR code — use o código manual abaixo.</p>
+          <p className="text-xs text-red-400">{t("totpEnrollment.qrError")}</p>
         ) : (
           <div className="skeleton h-[180px] w-[180px]" />
         )}
       </div>
       <div className="rounded-xl border border-white/10 bg-ink-950/80 p-3">
         <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.15em] text-slate-600">
-          Não consegue escanear? Digite o código
+          {t("totpEnrollment.manualCodeHint")}
         </p>
         <div className="flex items-center justify-between gap-2">
           <code className="break-all font-mono text-xs tracking-wider text-accent-soft">{formatSecret(secret)}</code>
@@ -73,7 +75,7 @@ export function TotpEnrollment({ otpauthUrl, secret }: TotpEnrollmentProps) {
             onClick={handleCopy}
             className="shrink-0 rounded-md border border-white/10 px-2 py-1 text-[10px] font-medium text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
           >
-            {copied ? "Copiado!" : "Copiar"}
+            {copied ? t("totpEnrollment.copied") : t("totpEnrollment.copy")}
           </button>
         </div>
       </div>

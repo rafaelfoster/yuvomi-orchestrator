@@ -1,4 +1,10 @@
+import { i18n } from "../i18n";
+
 const BYTE_UNITS = ["B", "KB", "MB", "GB", "TB"] as const;
+
+function currentLocale(): string {
+  return i18n.resolvedLanguage ?? i18n.language ?? "en";
+}
 
 export function formatBytes(bytes: number | null | undefined): string {
   if (bytes == null || bytes < 0) return "—";
@@ -10,12 +16,12 @@ export function formatBytes(bytes: number | null | undefined): string {
 
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  return new Date(iso).toLocaleString(currentLocale(), { dateStyle: "short", timeStyle: "short" });
 }
 
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+  return new Date(iso).toLocaleDateString(currentLocale(), { day: "2-digit", month: "short" });
 }
 
 const RELATIVE_STEPS: Array<{ limit: number; divisor: number; unit: Intl.RelativeTimeFormatUnit }> = [
@@ -27,14 +33,13 @@ const RELATIVE_STEPS: Array<{ limit: number; divisor: number; unit: Intl.Relativ
   { limit: Infinity, divisor: 86400 * 365, unit: "year" },
 ];
 
-const relativeFormatter = new Intl.RelativeTimeFormat("pt-BR", { numeric: "auto" });
-
 export function timeAgo(iso: string | null | undefined): string {
   if (!iso) return "—";
   const seconds = (new Date(iso).getTime() - Date.now()) / 1000;
   const abs = Math.abs(seconds);
   const step = RELATIVE_STEPS.find((s) => abs < s.limit) ?? RELATIVE_STEPS[RELATIVE_STEPS.length - 1];
-  return relativeFormatter.format(Math.round(seconds / step.divisor), step.unit);
+  const formatter = new Intl.RelativeTimeFormat(currentLocale(), { numeric: "auto" });
+  return formatter.format(Math.round(seconds / step.divisor), step.unit);
 }
 
 export function formatPercent(value: number): string {

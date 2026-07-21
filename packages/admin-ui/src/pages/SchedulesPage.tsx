@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { schedulesApi, tenantsApi, type Schedule, type Tenant } from "../api/client";
 import { extractApiError } from "../hooks/useFleetData";
+import { LATEST_TAG, useReleaseTags } from "../hooks/useReleaseTags";
 import { formatDateTime } from "../lib/format";
 import { StatusBadge } from "../components/StatusBadge";
 import { EmptyState, LoadingRows } from "../components/ui/EmptyState";
@@ -8,6 +10,7 @@ import { Modal } from "../components/ui/Modal";
 import { IconClock, IconPlus } from "../components/icons";
 
 export function SchedulesPage() {
+  const { t } = useTranslation();
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,7 +24,7 @@ export function SchedulesPage() {
       setSchedules(scheduleList);
       setTenants(tenantList);
     } catch (err) {
-      setError(extractApiError(err, "Falha ao carregar agendamentos"));
+      setError(extractApiError(err, t("schedules.loadError")));
     } finally {
       setLoading(false);
     }
@@ -31,18 +34,18 @@ export function SchedulesPage() {
     load();
   }, []);
 
-  const tenantNames = useMemo(() => new Map(tenants.map((t) => [t.id, t.name])), [tenants]);
+  const tenantNames = useMemo(() => new Map(tenants.map((tenant) => [tenant.id, tenant.name])), [tenants]);
 
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight text-white">Agendamentos</h1>
-          <p className="mt-1 text-sm text-slate-500">Atualizações e reinícios programados, recorrentes ou pontuais.</p>
+          <h1 className="font-display text-2xl font-bold tracking-tight text-white">{t("schedules.title")}</h1>
+          <p className="mt-1 text-sm text-slate-500">{t("schedules.subtitle")}</p>
         </div>
         <button onClick={() => setShowCreate(true)} className="btn-primary">
           <IconPlus className="h-4 w-4" />
-          Novo agendamento
+          {t("schedules.newSchedule")}
         </button>
       </header>
 
@@ -54,12 +57,12 @@ export function SchedulesPage() {
         <div className="glass-panel">
           <EmptyState
             icon={<IconClock className="h-8 w-8" />}
-            title="Nenhum agendamento criado"
-            description="Programe atualizações de imagem ou reinícios para uma família ou toda a frota."
+            title={t("schedules.noSchedulesTitle")}
+            description={t("schedules.noSchedulesDesc")}
             action={
               <button onClick={() => setShowCreate(true)} className="btn-primary">
                 <IconPlus className="h-4 w-4" />
-                Novo agendamento
+                {t("schedules.newSchedule")}
               </button>
             }
           />
@@ -69,11 +72,11 @@ export function SchedulesPage() {
           <table className="w-full min-w-[760px] text-sm">
             <thead>
               <tr className="border-b border-white/[0.05] text-left text-xs uppercase tracking-wider text-slate-500">
-                <th className="px-5 py-3.5 font-medium">Tipo</th>
-                <th className="px-5 py-3.5 font-medium">Alvo</th>
-                <th className="px-5 py-3.5 font-medium">Agenda</th>
-                <th className="px-5 py-3.5 font-medium">Última execução</th>
-                <th className="px-5 py-3.5 font-medium">Status</th>
+                <th className="px-5 py-3.5 font-medium">{t("schedules.tableType")}</th>
+                <th className="px-5 py-3.5 font-medium">{t("schedules.tableTarget")}</th>
+                <th className="px-5 py-3.5 font-medium">{t("schedules.tableSchedule")}</th>
+                <th className="px-5 py-3.5 font-medium">{t("schedules.tableLastRun")}</th>
+                <th className="px-5 py-3.5 font-medium">{t("schedules.tableStatus")}</th>
                 <th className="px-5 py-3.5" />
               </tr>
             </thead>
@@ -82,14 +85,14 @@ export function SchedulesPage() {
                 <tr key={schedule.id} className="border-b border-white/[0.03] transition-colors last:border-0 hover:bg-white/[0.03]">
                   <td className="px-5 py-3.5">
                     <span className="font-medium text-white">
-                      {schedule.type === "UPDATE" ? "Atualizar imagem" : "Reiniciar"}
+                      {schedule.type === "UPDATE" ? t("schedules.updateImage") : t("schedules.restart")}
                     </span>
                     {schedule.targetImage && (
                       <span className="block max-w-[220px] truncate font-mono text-xs text-slate-600">{schedule.targetImage}</span>
                     )}
                   </td>
                   <td className="px-5 py-3.5 text-slate-400">
-                    {schedule.tenantId ? tenantNames.get(schedule.tenantId) ?? schedule.tenantId : "Toda a frota"}
+                    {schedule.tenantId ? tenantNames.get(schedule.tenantId) ?? schedule.tenantId : t("schedules.allInstances")}
                   </td>
                   <td className="px-5 py-3.5">
                     {schedule.cronExpression ? (
@@ -114,13 +117,13 @@ export function SchedulesPage() {
                           onClick={() => schedulesApi.runNow(schedule.id).then(load)}
                           className="text-xs font-medium text-accent-soft hover:underline"
                         >
-                          Executar agora
+                          {t("schedules.runNow")}
                         </button>
                         <button
                           onClick={() => schedulesApi.cancel(schedule.id).then(load)}
                           className="text-xs font-medium text-red-400 hover:underline"
                         >
-                          Cancelar
+                          {t("schedules.cancelSchedule")}
                         </button>
                       </div>
                     )}
@@ -156,9 +159,12 @@ function CreateScheduleModal({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const { t } = useTranslation();
+  const { releases } = useReleaseTags();
   const [type, setType] = useState<"UPDATE" | "RESTART">("UPDATE");
   const [tenantId, setTenantId] = useState("");
-  const [targetImage, setTargetImage] = useState("");
+  const [targetImageRepo, setTargetImageRepo] = useState("ghcr.io/ulsklyc/yuvomi");
+  const [targetImageTag, setTargetImageTag] = useState("");
   const [mode, setMode] = useState<"cron" | "once">("once");
   const [cronExpression, setCronExpression] = useState("0 4 * * *");
   const [runAt, setRunAt] = useState("");
@@ -173,32 +179,32 @@ function CreateScheduleModal({
       await schedulesApi.create({
         tenantId: tenantId || undefined,
         type,
-        targetImage: type === "UPDATE" ? targetImage : undefined,
+        targetImage: type === "UPDATE" ? `${targetImageRepo}:${targetImageTag}` : undefined,
         cronExpression: mode === "cron" ? cronExpression : undefined,
         runAt: mode === "once" ? new Date(runAt).toISOString() : undefined,
       });
       onCreated();
     } catch (err) {
-      setError(extractApiError(err, "Falha ao criar agendamento"));
+      setError(extractApiError(err, t("schedules.createError")));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Novo agendamento" subtitle="Tarefa programada de manutenção da frota">
+    <Modal open={open} onClose={onClose} title={t("schedules.modalTitle")} subtitle={t("schedules.modalSubtitle")}>
       <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-slate-400">Tipo</label>
+          <label className="mb-1.5 block text-xs font-medium text-slate-400">{t("schedules.fieldType")}</label>
           <select value={type} onChange={(e) => setType(e.target.value as "UPDATE" | "RESTART")} className="glass-input">
-            <option value="UPDATE">Atualizar imagem</option>
-            <option value="RESTART">Reiniciar</option>
+            <option value="UPDATE">{t("schedules.updateImage")}</option>
+            <option value="RESTART">{t("schedules.restart")}</option>
           </select>
         </div>
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-slate-400">Alvo</label>
+          <label className="mb-1.5 block text-xs font-medium text-slate-400">{t("schedules.fieldTarget")}</label>
           <select value={tenantId} onChange={(e) => setTenantId(e.target.value)} className="glass-input">
-            <option value="">Toda a frota</option>
+            <option value="">{t("schedules.allInstances")}</option>
             {tenants.map((tenant) => (
               <option key={tenant.id} value={tenant.id}>
                 {tenant.name}
@@ -207,27 +213,48 @@ function CreateScheduleModal({
           </select>
         </div>
         {type === "UPDATE" && (
-          <div className="sm:col-span-2">
-            <label className="mb-1.5 block text-xs font-medium text-slate-400">Imagem alvo</label>
-            <input
-              required
-              value={targetImage}
-              onChange={(e) => setTargetImage(e.target.value)}
-              placeholder="ghcr.io/ulsklyc/yuvomi:v1.4.2"
-              className="glass-input font-mono !text-xs"
-            />
+          <div className="sm:col-span-2 grid grid-cols-1 gap-4 sm:grid-cols-[2fr_1fr]">
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-slate-400">{t("schedules.fieldTargetImage")}</label>
+              <input
+                required
+                value={targetImageRepo}
+                onChange={(e) => setTargetImageRepo(e.target.value)}
+                placeholder="ghcr.io/ulsklyc/yuvomi"
+                className="glass-input font-mono !text-xs"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-slate-400">{t("schedules.fieldTargetImageTag")}</label>
+              <select
+                required
+                value={targetImageTag}
+                onChange={(e) => setTargetImageTag(e.target.value)}
+                className="glass-input font-mono !text-xs"
+              >
+                <option value="" disabled>
+                  {t("tenantDetail.fieldTagPlaceholder")}
+                </option>
+                <option value={LATEST_TAG}>{LATEST_TAG}</option>
+                {releases.map((release) => (
+                  <option key={release.tag} value={release.tag}>
+                    {release.tag}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         )}
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-slate-400">Modo</label>
+          <label className="mb-1.5 block text-xs font-medium text-slate-400">{t("schedules.fieldMode")}</label>
           <select value={mode} onChange={(e) => setMode(e.target.value as "cron" | "once")} className="glass-input">
-            <option value="once">Uma vez</option>
-            <option value="cron">Recorrente (cron)</option>
+            <option value="once">{t("schedules.modeOnce")}</option>
+            <option value="cron">{t("schedules.modeCron")}</option>
           </select>
         </div>
         {mode === "cron" ? (
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-slate-400">Expressão cron</label>
+            <label className="mb-1.5 block text-xs font-medium text-slate-400">{t("schedules.fieldCron")}</label>
             <input
               value={cronExpression}
               onChange={(e) => setCronExpression(e.target.value)}
@@ -236,17 +263,17 @@ function CreateScheduleModal({
           </div>
         ) : (
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-slate-400">Data/hora</label>
+            <label className="mb-1.5 block text-xs font-medium text-slate-400">{t("schedules.fieldDateTime")}</label>
             <input type="datetime-local" required value={runAt} onChange={(e) => setRunAt(e.target.value)} className="glass-input" />
           </div>
         )}
         {error && <p className="text-sm text-red-400 sm:col-span-2">{error}</p>}
         <div className="flex justify-end gap-2 sm:col-span-2">
           <button type="button" onClick={onClose} className="btn-ghost">
-            Cancelar
+            {t("schedules.cancel")}
           </button>
           <button type="submit" disabled={busy} className="btn-primary">
-            {busy ? "Criando…" : "Criar agendamento"}
+            {busy ? t("schedules.creating") : t("schedules.create")}
           </button>
         </div>
       </form>

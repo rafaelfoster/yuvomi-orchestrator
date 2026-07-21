@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { max, scaleBand, scaleLinear } from "d3";
+import { useTranslation } from "react-i18next";
 import { useMeasure } from "../../hooks/useMeasure";
 import { ChartTooltip, type TooltipState } from "./ChartTooltip";
 
@@ -17,6 +18,7 @@ interface StackedBarChartProps {
 const MARGIN = { top: 12, right: 8, bottom: 24, left: 30 };
 
 export function StackedBarChart({ data, formatValue = String }: StackedBarChartProps) {
+  const { t } = useTranslation();
   const [containerRef, { width, height }] = useMeasure<HTMLDivElement>();
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -70,7 +72,7 @@ export function StackedBarChart({ data, formatValue = String }: StackedBarChartP
   return (
     <div ref={containerRef} className="relative h-full min-h-[200px] w-full">
       {innerWidth > 0 && innerHeight > 0 && (
-        <svg width={width} height={height} role="img" aria-label="Gráfico de barras">
+        <svg width={width} height={height} role="img" aria-label={t("chart.barChart")}>
           <g transform={`translate(${MARGIN.left}, ${MARGIN.top})`}>
             {yScale.ticks(4).map((tick) => (
               <g key={tick} transform={`translate(0, ${yScale(tick)})`}>

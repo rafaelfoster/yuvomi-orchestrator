@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   backupsApi,
   schedulesApi,
@@ -68,6 +69,7 @@ async function fetchFleet(): Promise<FleetData> {
 
 /** Loads the whole fleet snapshot (tenants + health + backups + schedules) and refreshes it periodically. */
 export function useFleetData(): FleetState & { reload: () => Promise<void> } {
+  const { t } = useTranslation();
   const [state, setState] = useState<FleetState>({ data: null, loading: true, error: null });
   const inFlight = useRef(false);
 
@@ -81,12 +83,12 @@ export function useFleetData(): FleetState & { reload: () => Promise<void> } {
       setState((prev) => ({
         data: prev.data,
         loading: false,
-        error: extractApiError(err, "Falha ao carregar dados da frota"),
+        error: extractApiError(err, t("common.loadError")),
       }));
     } finally {
       inFlight.current = false;
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     reload();

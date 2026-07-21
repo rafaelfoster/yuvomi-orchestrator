@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { arc, pie, type PieArcDatum } from "d3";
+import { useTranslation } from "react-i18next";
 import { useMeasure } from "../../hooks/useMeasure";
 import { ChartTooltip, type TooltipState } from "./ChartTooltip";
 
@@ -17,6 +18,7 @@ interface DonutChartProps {
 }
 
 export function DonutChart({ data, centerLabel, centerValue }: DonutChartProps) {
+  const { t } = useTranslation();
   const [containerRef, { width, height }] = useMeasure<HTMLDivElement>();
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -60,8 +62,8 @@ export function DonutChart({ data, centerLabel, centerValue }: DonutChartProps) 
       y: event.clientY - bounds.top,
       title: slice.data.label,
       lines: [
-        { label: "Quantidade", value: String(slice.data.value), color: slice.data.color },
-        { label: "Proporção", value: total > 0 ? `${Math.round((slice.data.value / total) * 100)}%` : "—" },
+        { label: t("chart.quantity"), value: String(slice.data.value), color: slice.data.color },
+        { label: t("chart.proportion"), value: total > 0 ? `${Math.round((slice.data.value / total) * 100)}%` : "—" },
       ],
     });
   }

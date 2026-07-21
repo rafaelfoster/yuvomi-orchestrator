@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { tenantsApi } from "../api/client";
 import { useFleetData, extractApiError } from "../hooks/useFleetData";
 import { formatDateTime } from "../lib/format";
-import { healthMeta, STATUS_META } from "../lib/status";
+import { healthKey, healthMeta, STATUS_META } from "../lib/status";
 import { StatusBadge } from "../components/StatusBadge";
 import { EmptyState, LoadingRows } from "../components/ui/EmptyState";
 import { Modal } from "../components/ui/Modal";
@@ -12,6 +13,7 @@ import { IconPlus, IconSearch, IconUsers } from "../components/icons";
 const FILTERABLE_STATUSES = ["RUNNING", "PROVISIONING", "PAUSED", "UNHEALTHY", "STOPPED"] as const;
 
 export function TenantsListPage() {
+  const { t } = useTranslation();
   const { data, loading, error, reload } = useFleetData();
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
@@ -43,12 +45,12 @@ export function TenantsListPage() {
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight text-white">Famílias</h1>
-          <p className="mt-1 text-sm text-slate-500">Uma instância isolada do Yuvomi por família.</p>
+          <h1 className="font-display text-2xl font-bold tracking-tight text-white">{t("tenantsList.title")}</h1>
+          <p className="mt-1 text-sm text-slate-500">{t("tenantsList.subtitle")}</p>
         </div>
         <button onClick={() => setShowCreate(true)} className="btn-primary">
           <IconPlus className="h-4 w-4" />
-          Nova família
+          {t("tenantsList.newFamily")}
         </button>
       </header>
 
@@ -58,7 +60,7 @@ export function TenantsListPage() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar por nome, subdomínio ou contato…"
+            placeholder={t("tenantsList.searchPlaceholder")}
             className="glass-input !pl-9"
           />
         </div>
@@ -73,7 +75,7 @@ export function TenantsListPage() {
                   : "text-slate-500 ring-white/10 hover:text-slate-300"
               }`}
             >
-              {STATUS_META[status].label} · {statusCounts.get(status)}
+              {t(`status.${status}`, STATUS_META[status].label)} · {statusCounts.get(status)}
             </button>
           ))}
         </div>
@@ -87,17 +89,13 @@ export function TenantsListPage() {
         <div className="glass-panel">
           <EmptyState
             icon={<IconUsers className="h-8 w-8" />}
-            title={query || statusFilter ? "Nenhuma família encontrada" : "Nenhuma família provisionada"}
-            description={
-              query || statusFilter
-                ? "Ajuste a busca ou os filtros de status."
-                : "Provisione a primeira instância para começar."
-            }
+            title={query || statusFilter ? t("tenantsList.noFamiliesFound") : t("tenantsList.noFamiliesYet")}
+            description={query || statusFilter ? t("tenantsList.noFamiliesFoundDesc") : t("tenantsList.noFamiliesYetDesc")}
             action={
               !query && !statusFilter ? (
                 <button onClick={() => setShowCreate(true)} className="btn-primary">
                   <IconPlus className="h-4 w-4" />
-                  Nova família
+                  {t("tenantsList.newFamily")}
                 </button>
               ) : undefined
             }
@@ -108,12 +106,12 @@ export function TenantsListPage() {
           <table className="w-full min-w-[720px] text-sm">
             <thead>
               <tr className="border-b border-white/[0.05] text-left text-xs uppercase tracking-wider text-slate-500">
-                <th className="px-5 py-3.5 font-medium">Família</th>
-                <th className="px-5 py-3.5 font-medium">Contato</th>
-                <th className="px-5 py-3.5 font-medium">Imagem</th>
-                <th className="px-5 py-3.5 font-medium">Saúde</th>
-                <th className="px-5 py-3.5 font-medium">Criada</th>
-                <th className="px-5 py-3.5 font-medium">Status</th>
+                <th className="px-5 py-3.5 font-medium">{t("tenantsList.tableFamily")}</th>
+                <th className="px-5 py-3.5 font-medium">{t("tenantsList.tableContact")}</th>
+                <th className="px-5 py-3.5 font-medium">{t("tenantsList.tableImage")}</th>
+                <th className="px-5 py-3.5 font-medium">{t("tenantsList.tableHealth")}</th>
+                <th className="px-5 py-3.5 font-medium">{t("tenantsList.tableCreated")}</th>
+                <th className="px-5 py-3.5 font-medium">{t("tenantsList.tableStatus")}</th>
               </tr>
             </thead>
             <tbody>
@@ -135,7 +133,7 @@ export function TenantsListPage() {
                     <td className="px-5 py-3.5">
                       <span className="flex items-center gap-1.5 text-xs text-slate-400">
                         <span className="h-2 w-2 rounded-full" style={{ backgroundColor: health.color }} />
-                        {health.label}
+                        {t(`health.${healthKey(tenant.container?.health)}`, health.label)}
                       </span>
                     </td>
                     <td className="px-5 py-3.5 text-xs text-slate-500">{formatDateTime(tenant.createdAt)}</td>
@@ -163,6 +161,7 @@ export function TenantsListPage() {
 }
 
 function CreateTenantModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: () => void }) {
+  const { t } = useTranslation();
   const [name, setName] = useState("");
   const [subdomain, setSubdomain] = useState("");
   const [contactName, setContactName] = useState("");
@@ -182,26 +181,26 @@ function CreateTenantModal({ open, onClose, onCreated }: { open: boolean; onClos
       setContactEmail("");
       onCreated();
     } catch (err) {
-      setError(extractApiError(err, "Falha ao criar tenant"));
+      setError(extractApiError(err, t("tenantsList.createError")));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Nova família" subtitle="Provisiona container, volume e subdomínio dedicados">
+    <Modal open={open} onClose={onClose} title={t("tenantsList.createModalTitle")} subtitle={t("tenantsList.createModalSubtitle")}>
       <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Nome da família" value={name} onChange={setName} required autoFocus />
-        <Field label="Subdomínio" value={subdomain} onChange={setSubdomain} required placeholder="rafael" />
-        <Field label="Nome do contato" value={contactName} onChange={setContactName} required />
-        <Field label="E-mail do contato" value={contactEmail} onChange={setContactEmail} type="email" />
+        <Field label={t("tenantsList.fieldName")} value={name} onChange={setName} required autoFocus />
+        <Field label={t("tenantsList.fieldSubdomain")} value={subdomain} onChange={setSubdomain} required placeholder="rafael" />
+        <Field label={t("tenantsList.fieldContactName")} value={contactName} onChange={setContactName} required />
+        <Field label={t("tenantsList.fieldContactEmail")} value={contactEmail} onChange={setContactEmail} type="email" />
         {error && <p className="text-sm text-red-400 sm:col-span-2">{error}</p>}
         <div className="flex justify-end gap-2 sm:col-span-2">
           <button type="button" onClick={onClose} className="btn-ghost">
-            Cancelar
+            {t("tenantsList.cancel")}
           </button>
           <button type="submit" disabled={busy} className="btn-primary">
-            {busy ? "Provisionando…" : "Provisionar"}
+            {busy ? t("tenantsList.provisioning") : t("tenantsList.provision")}
           </button>
         </div>
       </form>
