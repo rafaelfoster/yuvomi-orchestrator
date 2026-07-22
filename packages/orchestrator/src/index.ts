@@ -1,3 +1,15 @@
+// Must be the first import: patches Express Router methods so a rejected
+// promise from an `async (req, res) => {...}` handler reaches the error
+// middleware via `next(err)` instead of becoming a silent unhandled
+// rejection. Express 4 has no async support of its own — every route file
+// here uses `async` handlers with `throw err` for unexpected errors, which
+// without this patch never sends a response at all (the client just hangs
+// until it times out) and only surfaces via the process-level
+// unhandledRejection net below. Confirmed in production: a tenant image
+// update that failed mid-flight (bad image tag) left the request hanging
+// and the tenant with no container, with nothing but a log line to show
+// for it.
+import "express-async-errors";
 import express from "express";
 import cookieParser from "cookie-parser";
 import cors from "cors";

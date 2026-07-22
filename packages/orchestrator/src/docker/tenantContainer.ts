@@ -28,9 +28,12 @@ export async function pullImage(ref: string): Promise<void> {
   });
 }
 
-export async function createTenantContainer(spec: TenantContainerSpec): Promise<string> {
+export async function createTenantContainer(
+  spec: TenantContainerSpec,
+  options: { skipPull?: boolean } = {},
+): Promise<string> {
   const ref = imageRef(spec);
-  await pullImage(ref);
+  if (!options.skipPull) await pullImage(ref);
 
   const container = await docker.createContainer({
     name: spec.containerName,
@@ -107,14 +110,23 @@ export async function removeTenantContainer(containerId: string): Promise<void> 
 }
 
 /**
- * Surgical update: stop + remove the old container, keep the data volume
- * and secrets file untouched on disk, recreate with a new image tag.
+ * Surgical update: pull the new image *before* touching the running
+ * container, then stop + remove the old one and recreate with the new
+ * tag (data volume and secrets file untouched on disk throughout).
+ *
+ * Pulling first is deliberate: a bad/nonexistent tag fails at the pull
+ * step, before the old container is stopped — so the tenant stays online
+ * on the previous image instead of ending up with no container at all.
+ * (Previously the old container was removed first; a pull failure for the
+ * new tag then left the tenant with nothing running until manually
+ * recreated.)
  */
 export async function updateTenantImage(
   spec: TenantContainerSpec,
   previousContainerId: string,
 ): Promise<string> {
+  await pullImage(imageRef(spec));
   await stopTenantContainer(previousContainerId);
   await removeTenantContainer(previousContainerId);
-  return createTenantContainer(spec);
+  return createTenantContainer(spec, { skipPull: true });
 }
