@@ -4,6 +4,8 @@ import { useTranslation } from "react-i18next";
 import { authApi } from "../api/client";
 import { loginWithPasskey } from "../auth/webauthn";
 import { useAuth } from "../auth/AuthContext";
+import { extractApiError, getHttpStatus } from "../hooks/useFleetData";
+import { useToast } from "../components/ui/ToastProvider";
 import { IconBolt, IconShield } from "../components/icons";
 import { TotpEnrollment } from "../components/TotpEnrollment";
 
@@ -13,6 +15,7 @@ export function LoginPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { refresh } = useAuth();
+  const { showToast } = useToast();
 
   const [step, setStep] = useState<Step>("credentials");
   const [email, setEmail] = useState("");
@@ -28,6 +31,20 @@ export function LoginPage() {
     navigate("/", { replace: true });
   }
 
+  // 401 is a genuine "wrong credentials/code" — everything else (502 from
+  // an unreachable orchestrator, a network error, a 500) is an
+  // infrastructure problem the user shouldn't be told to double-check
+  // their password for. Surface those as a toast with the real error
+  // instead of a misleading "invalid credentials" message.
+  function reportAuthError(err: unknown, invalidMessage: string) {
+    if (getHttpStatus(err) === 401) {
+      setError(invalidMessage);
+    } else {
+      setError(null);
+      showToast(extractApiError(err, t("common.unexpectedError")));
+    }
+  }
+
   async function handleCredentials(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -39,8 +56,8 @@ export function LoginPage() {
       if (result.mfaSetupRequired) {
         setSetupSecret(await authApi.totpSetup(result.pendingId));
       }
-    } catch {
-      setError(t("auth.invalidCredentials"));
+    } catch (err) {
+      reportAuthError(err, t("auth.invalidCredentials"));
     } finally {
       setBusy(false);
     }
@@ -54,8 +71,8 @@ export function LoginPage() {
     try {
       await authApi.totpVerify(pendingId, totpToken);
       await afterLogin();
-    } catch {
-      setError(t("auth.invalidCode"));
+    } catch (err) {
+      reportAuthError(err, t("auth.invalidCode"));
     } finally {
       setBusy(false);
     }
@@ -69,8 +86,8 @@ export function LoginPage() {
     try {
       await authApi.totpEnable(pendingId, totpToken);
       await afterLogin();
-    } catch {
-      setError(t("auth.invalidCode"));
+    } catch (err) {
+      reportAuthError(err, t("auth.invalidCode"));
     } finally {
       setBusy(false);
     }
@@ -82,8 +99,8 @@ export function LoginPage() {
     try {
       await loginWithPasskey(email);
       await afterLogin();
-    } catch {
-      setError(t("auth.passkeyFailed"));
+    } catch (err) {
+      reportAuthError(err, t("auth.passkeyFailed"));
     } finally {
       setBusy(false);
     }

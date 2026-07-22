@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
+import { ToastProvider } from "./components/ui/ToastProvider";
 import { Layout } from "./components/Layout";
 import { LoginPage } from "./pages/LoginPage";
 import { ChangePasswordPage } from "./pages/ChangePasswordPage";
@@ -27,32 +28,34 @@ function RequirePasswordChange({ children }: { children: React.ReactNode }) {
 
 export function App() {
   return (
-    <AuthProvider>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/activate" element={<ActivatePage />} />
-        <Route
-          path="/change-password"
-          element={
-            <RequirePasswordChange>
-              <ChangePasswordPage />
-            </RequirePasswordChange>
-          }
-        />
-        <Route
-          element={
-            <RequireAuth>
-              <Layout />
-            </RequireAuth>
-          }
-        >
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/tenants" element={<TenantsListPage />} />
-          <Route path="/tenants/:id" element={<TenantDetailPage />} />
-          <Route path="/schedules" element={<SchedulesPage />} />
-        </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </AuthProvider>
+    <ToastProvider>
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/activate" element={<ActivatePage />} />
+          <Route
+            path="/change-password"
+            element={
+              <RequirePasswordChange>
+                <ChangePasswordPage />
+              </RequirePasswordChange>
+            }
+          />
+          <Route
+            element={
+              <RequireAuth>
+                <Layout />
+              </RequireAuth>
+            }
+          >
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/tenants" element={<TenantsListPage />} />
+            <Route path="/tenants/:id" element={<TenantDetailPage />} />
+            <Route path="/schedules" element={<SchedulesPage />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </AuthProvider>
+    </ToastProvider>
   );
 }

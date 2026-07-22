@@ -39,6 +39,11 @@ export function extractApiError(err: unknown, fallback: string): string {
   return maybe.response?.data?.error ?? maybe.message ?? fallback;
 }
 
+/** HTTP status of a failed axios request, if any (undefined for network/timeout errors with no response). */
+export function getHttpStatus(err: unknown): number | undefined {
+  return (err as { response?: { status?: number } }).response?.status;
+}
+
 async function fetchFleet(): Promise<FleetData> {
   const [tenants, schedules] = await Promise.all([tenantsApi.list(), schedulesApi.list()]);
 
