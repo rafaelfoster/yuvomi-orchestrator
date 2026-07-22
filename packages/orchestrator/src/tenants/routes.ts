@@ -12,7 +12,7 @@ import {
   updateTenantImage,
 } from "./service.js";
 import { PasswordResetError, resetTenantAdminPassword } from "./passwordReset.js";
-import { inspectTenantContainer } from "../docker/inspect.js";
+import { getTenantAppVersion, inspectTenantContainer } from "../docker/inspect.js";
 import { streamTenantLogs } from "../docker/logs.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import type { AuthedRequest } from "../middleware/requireAuth.js";
@@ -66,8 +66,11 @@ tenantsRouter.get("/:id", async (req, res) => {
 tenantsRouter.get("/:id/status", async (req, res) => {
   try {
     const tenant = await refreshTenantStatus(req.params.id);
-    const state = tenant.containerId ? await inspectTenantContainer(tenant.containerId) : null;
-    res.json({ tenant, container: state });
+    if (!tenant.containerId) return res.json({ tenant, container: null });
+
+    const state = await inspectTenantContainer(tenant.containerId);
+    const appVersion = state?.running ? await getTenantAppVersion(tenant.containerId, state.startedAt) : null;
+    res.json({ tenant, container: state ? { ...state, appVersion } : null });
   } catch (err) {
     if (!handleTenantError(err, res)) throw err;
   }

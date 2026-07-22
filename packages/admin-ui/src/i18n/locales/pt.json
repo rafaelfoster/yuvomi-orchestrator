@@ -139,7 +139,7 @@
     "confirmRemove": "Remover o tenant {{name}}?",
     "removeError": "Falha ao remover tenant",
     "actionError": "Falha na operação",
-    "infoImage": "Imagem",
+    "infoImage": "Versão",
     "infoContainer": "Container",
     "infoHealth": "Saúde",
     "infoUptime": "No ar desde",

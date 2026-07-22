@@ -182,7 +182,11 @@ export function TenantDetailPage() {
       {actionError && <div className="glass-panel border-red-500/30 bg-red-500/5 p-4 text-sm text-red-300">{actionError}</div>}
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <InfoCard label={t("tenantDetail.infoImage")} value={`${tenant.image}:${tenant.imageTag}`} mono />
+        <InfoCard
+          label={t("tenantDetail.infoImage")}
+          value={container?.appVersion ? `v${container.appVersion}` : tenant.imageTag}
+          mono
+        />
         <InfoCard label={t("tenantDetail.infoContainer")} value={container?.status ?? t("tenantDetail.containerMissing")} />
         <InfoCard
           label={t("tenantDetail.infoHealth")}

@@ -38,6 +38,8 @@ export interface ContainerState {
   imageTag: string;
   imageSha: string;
   startedAt: string | null;
+  /** Yuvomi's own app version, parsed from its boot log line; null until the app has logged it (or the container isn't running). */
+  appVersion: string | null;
 }
 
 export interface Invite {
