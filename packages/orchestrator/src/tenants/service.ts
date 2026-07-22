@@ -166,13 +166,32 @@ export async function pauseTenant(id: string, actorId?: string): Promise<Tenant>
   return updated;
 }
 
+/**
+ * Starts the tenant's container. If it was removed out from under us
+ * (e.g. an image update that got interrupted mid-flight — see
+ * src/docker/logs.ts for the incident that produced exactly this state:
+ * old container removed, new one never created, DB left pointing at a
+ * dead container ID), recreates it from the tenant's current
+ * image/tag/data path instead of failing, since the data volume and
+ * secrets file on disk are untouched either way.
+ */
 export async function resumeTenant(id: string, actorId?: string): Promise<Tenant> {
   const tenant = await requireTenant(id);
   if (!tenant.containerId) throw new TenantError("tenant has no container", "INVALID_STATE");
-  await startTenantContainer(tenant.containerId);
+
+  const state = await inspectTenantContainer(tenant.containerId);
+  const containerId = state ? tenant.containerId : await createTenantContainer(toSpec(tenant));
+  if (state) await startTenantContainer(tenant.containerId);
+
   await writeTenantRoute({ tenantId: tenant.id, subdomain: tenant.subdomain, containerName: tenant.containerName });
-  const updated = await prisma.tenant.update({ where: { id }, data: { status: "RUNNING" } });
-  await recordAudit({ actorId, action: "tenant.resume", targetType: "Tenant", targetId: id });
+  const updated = await prisma.tenant.update({ where: { id }, data: { status: "RUNNING", containerId } });
+  await recordAudit({
+    actorId,
+    action: "tenant.resume",
+    targetType: "Tenant",
+    targetId: id,
+    metadata: state ? undefined : { recreated: true },
+  });
   return updated;
 }
 

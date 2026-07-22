@@ -11,6 +11,19 @@ import { ensureAdminBootstrap } from "./auth/bootstrap.js";
 
 const logger = pino({ name: "orchestrator", level: env.ORCHESTRATOR_LOG_LEVEL });
 
+// Last-resort safety net: a single uncaught exception/rejection anywhere
+// (e.g. a Docker stream 'error' event with no listener) otherwise kills
+// this whole process — taking down every tenant's routing and locking out
+// every admin, not just whatever request triggered it. Logging and
+// carrying on beats a full outage; see src/docker/logs.ts for the incident
+// that motivated this.
+process.on("uncaughtException", (err) => {
+  logger.error({ err }, "uncaught exception — process staying up");
+});
+process.on("unhandledRejection", (reason) => {
+  logger.error({ err: reason }, "unhandled rejection — process staying up");
+});
+
 // WEBAUTHN_ORIGIN always allowed (it's the deployed admin console); extra
 // origins (local dev servers, alternate hosts) come from
 // CORS_ALLOWED_ORIGINS. Kept as a Set + origin callback, not a static
