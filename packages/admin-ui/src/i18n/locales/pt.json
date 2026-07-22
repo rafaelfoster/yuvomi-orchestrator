@@ -1,7 +1,8 @@
 {
   "common": {
     "loading": "Carregando…",
-    "loadError": "Falha ao carregar dados das instâncias"
+    "loadError": "Falha ao carregar dados das instâncias",
+    "unexpectedError": "Algo deu errado ao falar com o servidor. Tente novamente."
   },
   "auth": {
     "tagline": "Console administrativo das instâncias",
@@ -129,8 +130,10 @@
     "back": "Todas as famílias",
     "contactLabel": "contato",
     "openInstance": "Abrir instância",
-    "pause": "Pausar",
-    "resume": "Retomar",
+    "stop": "Parar",
+    "start": "Iniciar",
+    "startMissing": "Iniciar (recriar contêiner)",
+    "containerMissing": "Não encontrado",
     "remove": "Remover",
     "confirmWipe": "Apagar também os dados (irreversível)? OK = apagar dados, Cancelar = manter dados.",
     "confirmRemove": "Remover o tenant {{name}}?",

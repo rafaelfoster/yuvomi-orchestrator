@@ -43,6 +43,7 @@ export function TenantDetailPage() {
   const [backups, setBackups] = useState<BackupLog[]>([]);
   const [logLines, setLogLines] = useState<string[]>([]);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -55,6 +56,14 @@ export function TenantDetailPage() {
 
   useEffect(() => {
     load();
+  }, [load]);
+
+  // Refreshed periodically so the container's real Docker state (which can
+  // drift from the tenant's DB status — e.g. after an interrupted image
+  // update) doesn't go stale while this page is open.
+  useEffect(() => {
+    const interval = setInterval(load, 15_000);
+    return () => clearInterval(interval);
   }, [load]);
 
   useEffect(() => {
@@ -98,10 +107,14 @@ export function TenantDetailPage() {
 
   async function runAction(action: () => Promise<Tenant>) {
     setActionError(null);
+    setActionBusy(true);
     try {
-      setTenant(await action());
+      await action();
+      await load();
     } catch (err) {
       setActionError(extractApiError(err, t("tenantDetail.actionError")));
+    } finally {
+      setActionBusy(false);
     }
   }
 
@@ -148,16 +161,15 @@ export function TenantDetailPage() {
               {t("tenantDetail.openInstance")}
             </a>
           )}
-          {tenant.status === "RUNNING" && (
-            <button onClick={() => runAction(() => tenantsApi.pause(tenant.id))} className="btn-ghost">
+          {container?.running ? (
+            <button onClick={() => runAction(() => tenantsApi.pause(tenant.id))} disabled={actionBusy} className="btn-ghost">
               <IconPause className="h-4 w-4" />
-              {t("tenantDetail.pause")}
+              {t("tenantDetail.stop")}
             </button>
-          )}
-          {tenant.status === "PAUSED" && (
-            <button onClick={() => runAction(() => tenantsApi.resume(tenant.id))} className="btn-primary">
+          ) : (
+            <button onClick={() => runAction(() => tenantsApi.resume(tenant.id))} disabled={actionBusy} className="btn-primary">
               <IconPlay className="h-4 w-4" />
-              {t("tenantDetail.resume")}
+              {container ? t("tenantDetail.start") : t("tenantDetail.startMissing")}
             </button>
           )}
           <button onClick={handleDelete} className="btn-danger">
@@ -171,7 +183,7 @@ export function TenantDetailPage() {
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <InfoCard label={t("tenantDetail.infoImage")} value={`${tenant.image}:${tenant.imageTag}`} mono />
-        <InfoCard label={t("tenantDetail.infoContainer")} value={container?.status ?? "—"} />
+        <InfoCard label={t("tenantDetail.infoContainer")} value={container?.status ?? t("tenantDetail.containerMissing")} />
         <InfoCard
           label={t("tenantDetail.infoHealth")}
           value={t(`health.${healthKey(container?.health)}`, health.label)}

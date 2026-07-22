@@ -1,7 +1,8 @@
 {
   "common": {
     "loading": "Loading…",
-    "loadError": "Failed to load instance data"
+    "loadError": "Failed to load instance data",
+    "unexpectedError": "Something went wrong talking to the server. Please try again."
   },
   "auth": {
     "tagline": "Fleet admin console",
@@ -129,8 +130,10 @@
     "back": "All families",
     "contactLabel": "contact",
     "openInstance": "Open instance",
-    "pause": "Pause",
-    "resume": "Resume",
+    "stop": "Stop",
+    "start": "Start",
+    "startMissing": "Start (recreate container)",
+    "containerMissing": "Not found",
     "remove": "Remove",
     "confirmWipe": "Also delete the data (irreversible)? OK = delete data, Cancel = keep data.",
     "confirmRemove": "Remove tenant {{name}}?",
