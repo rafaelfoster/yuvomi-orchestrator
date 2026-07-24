@@ -78,6 +78,7 @@ model Tenant {
   image          String
   imageTag       String
   dataPath       String    @unique
+  backupPath     String    @unique
   network        String
   contactName    String
   contactEmail   String?

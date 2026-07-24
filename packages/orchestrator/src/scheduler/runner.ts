@@ -1,6 +1,6 @@
 import { prisma } from "../db/client.js";
 import { recordAudit } from "../audit.js";
-import { updateTenantImage } from "../tenants/service.js";
+import { syncTenantRuntimeEnv, updateTenantImage } from "../tenants/service.js";
 import { startTenantContainer, stopTenantContainer } from "../docker/tenantContainer.js";
 import type { Schedule, Tenant } from "../db/generated/client/client.js";
 
@@ -19,6 +19,7 @@ async function applyToTenant(schedule: Schedule, tenant: Tenant): Promise<void> 
     await updateTenantImage(tenant.id, splitImageRef(schedule.targetImage));
   } else if (schedule.type === "RESTART") {
     if (!tenant.containerId) throw new Error("tenant has no container");
+    await syncTenantRuntimeEnv(tenant.id);
     await stopTenantContainer(tenant.containerId);
     await startTenantContainer(tenant.containerId);
   }

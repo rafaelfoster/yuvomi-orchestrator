@@ -1,92 +1,75 @@
 import path from "node:path";
-import { readdir, stat, unlink } from "node:fs/promises";
-import { docker } from "../docker/client.js";
+import { readdir, stat } from "node:fs/promises";
 import { prisma } from "../db/client.js";
 import { env } from "../config/env.js";
-import { recordAudit } from "../audit.js";
 import type { Tenant } from "../db/generated/client/client.js";
 
-/**
- * Runs `sqlite3 <db> ".backup '<dest>'"` inside the tenant container via
- * `docker exec` — a consistent, WAL-safe snapshot taken without stopping
- * the app. Assumes the Yuvomi image ships the `sqlite3` CLI; if it
- * doesn't, swap this for a `VACUUM INTO` call over the app's own DB
- * connection instead (would require a Yuvomi-side endpoint).
- */
-export async function runBackupForTenant(tenant: Tenant): Promise<void> {
-  if (!tenant.containerId) return;
+// Matches Yuvomi's own backup-file naming (BACKUP_FILE_PREFIX /
+// LEGACY_FILE_PREFIX in its backup-scheduler.js) — "yuvomi-backup-*.db" for
+// current builds, "oikos-backup-*.db" from before its rebrand.
+const BACKUP_FILE_RE = /^(yuvomi|oikos)-backup-.*\.db$/;
 
-  const log = await prisma.backupLog.create({ data: { tenantId: tenant.id, status: "RUNNING" } });
-
-  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const backupRelPath = `backups/backup-${timestamp}.sqlite`;
-  const containerDbPath = `${env.TENANT_DATA_MOUNT_PATH}/${env.TENANT_DB_FILENAME}`;
-  const containerBackupPath = `${env.TENANT_DATA_MOUNT_PATH}/${backupRelPath}`;
-
-  try {
-    const container = docker.getContainer(tenant.containerId);
-    const exec = await container.exec({
-      Cmd: [
-        "sh",
-        "-c",
-        `mkdir -p "$(dirname '${containerBackupPath}')" && sqlite3 '${containerDbPath}' ".backup '${containerBackupPath}'"`,
-      ],
-      AttachStdout: true,
-      AttachStderr: true,
-    });
-
-    const stream = await exec.start({});
-    const chunks: Buffer[] = [];
-    await new Promise<void>((resolve, reject) => {
-      const sink = { write: (chunk: Buffer) => chunks.push(chunk) };
-      docker.modem.demuxStream(
-        stream as unknown as NodeJS.ReadableStream,
-        sink as unknown as NodeJS.WritableStream,
-        sink as unknown as NodeJS.WritableStream,
-      );
-      stream.on("end", resolve);
-      stream.on("error", reject);
-    });
-
-    const result = await exec.inspect();
-    if (result.ExitCode !== 0) {
-      throw new Error(`sqlite3 backup exited ${result.ExitCode}: ${Buffer.concat(chunks).toString("utf8")}`);
-    }
-
-    const hostBackupPath = path.join(tenant.dataPath, backupRelPath);
-    const size = (await stat(hostBackupPath)).size;
-
-    await prisma.backupLog.update({
-      where: { id: log.id },
-      data: { status: "SUCCESS", finishedAt: new Date(), filePath: hostBackupPath, sizeBytes: size },
-    });
-
-    await pruneOldBackups(tenant.dataPath);
-  } catch (err) {
-    await prisma.backupLog.update({
-      where: { id: log.id },
-      data: { status: "FAILED", finishedAt: new Date(), errorMessage: (err as Error).message },
-    });
-    await recordAudit({
-      action: "backup.failed",
-      targetType: "Tenant",
-      targetId: tenant.id,
-      metadata: { error: (err as Error).message },
-    });
-  }
+// Recomputed rather than read from tenant.backupPath (the DB column): that
+// column is written once at provisioning and never updated on image/env
+// refresh, so it can go stale relative to TENANT_BACKUP_ROOT after a config
+// change — this always reflects the actual current bind-mount source.
+function tenantBackupDir(tenant: Tenant): string {
+  return path.join(env.TENANT_BACKUP_ROOT, tenant.id);
 }
 
-async function pruneOldBackups(dataPath: string): Promise<void> {
-  const dir = path.join(dataPath, "backups");
+/**
+ * Orchestrator does not create tenant backups itself. Yuvomi's own
+ * internal scheduler already does (BACKUP_DIR, see
+ * tenants/service.ts's tenantRuntimeEnv) using its own already-unlocked DB
+ * connection — the only thing that can produce a valid SQLCipher-encrypted
+ * copy. A `docker exec sqlite3 ...` approach (the original design here)
+ * cannot work at all: the shipped image doesn't ship the `sqlite3` CLI,
+ * and even if it did, a plain CLI `.backup` can't handle an
+ * SQLCipher-encrypted database without the key loaded via a SQLCipher
+ * PRAGMA, which only the app's own connection has.
+ *
+ * So this just reconciles the admin UI's view with whatever Yuvomi has
+ * already written to the shared TENANT_BACKUP_ROOT/<tenantId> directory:
+ * log any new file since the last check, and drop BackupLog rows whose
+ * file Yuvomi's own rotation (BACKUP_KEEP) has since deleted.
+ */
+export async function runBackupForTenant(tenant: Tenant): Promise<void> {
+  const dir = tenantBackupDir(tenant);
   const entries = await readdir(dir).catch(() => [] as string[]);
-  const cutoff = Date.now() - env.BACKUP_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+  const backupFiles = entries.filter((name) => BACKUP_FILE_RE.test(name));
 
-  for (const entry of entries) {
-    const filePath = path.join(dir, entry);
+  const existingRows = await prisma.backupLog.findMany({ where: { tenantId: tenant.id } });
+  const loggedPaths = new Set(existingRows.map((row) => row.filePath));
+
+  for (const name of backupFiles) {
+    const filePath = path.join(dir, name);
+    if (loggedPaths.has(filePath)) continue;
+
     const stats = await stat(filePath).catch(() => null);
-    if (stats && stats.mtimeMs < cutoff) {
-      await unlink(filePath).catch(() => undefined);
-    }
+    if (!stats) continue;
+
+    await prisma.backupLog.create({
+      data: {
+        tenantId: tenant.id,
+        status: "SUCCESS",
+        startedAt: stats.mtime,
+        finishedAt: stats.mtime,
+        filePath,
+        sizeBytes: stats.size,
+      },
+    });
+  }
+
+  await reconcileDeletedBackups(existingRows);
+}
+
+async function reconcileDeletedBackups(rows: { id: string; filePath: string | null }[]): Promise<void> {
+  for (const row of rows) {
+    if (!row.filePath) continue;
+    const exists = await stat(row.filePath)
+      .then(() => true)
+      .catch(() => false);
+    if (!exists) await prisma.backupLog.delete({ where: { id: row.id } }).catch(() => undefined);
   }
 }
 

@@ -10,6 +10,7 @@ export interface TenantContainerSpec {
   imageTag: string;
   dataPath: string; // host path: /srv/yuvomi/tenants/{tenant_id}/data
   envFilePath: string; // host path: /srv/yuvomi/tenants/{tenant_id}/.env
+  backupPath: string; // host path: /srv/yuvomi/tenant-backups/{tenant_id}
   network: string;
 }
 
@@ -17,12 +18,35 @@ function imageRef(spec: Pick<TenantContainerSpec, "image" | "imageTag">): string
   return `${spec.image}:${spec.imageTag}`;
 }
 
+export class ImagePullError extends Error {
+  constructor(
+    message: string,
+    public code: "NOT_FOUND" | "REGISTRY_ERROR",
+  ) {
+    super(message);
+  }
+}
+
+// Docker surfaces a missing tag/repo as "manifest unknown" (registry v2
+// error code) or, depending on the daemon/registry version, a plain
+// "not found" / "404" substring — never a distinct error type dockerode can
+// hand back structured, so this is a message-text match against the known
+// shapes.
+function isImageNotFoundError(message: string): boolean {
+  return /manifest unknown|manifest for .* not found|repository does not exist|not found: manifest|404/i.test(message);
+}
+
+function toImagePullError(err: unknown): ImagePullError {
+  const message = err instanceof Error ? err.message : String(err);
+  return new ImagePullError(message, isImageNotFoundError(message) ? "NOT_FOUND" : "REGISTRY_ERROR");
+}
+
 export async function pullImage(ref: string): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     docker.pull(ref, (err: unknown, stream: NodeJS.ReadableStream) => {
-      if (err) return reject(err);
+      if (err) return reject(toImagePullError(err));
       docker.modem.followProgress(stream, (progressErr: unknown) =>
-        progressErr ? reject(progressErr) : resolve(),
+        progressErr ? reject(toImagePullError(progressErr)) : resolve(),
       );
     });
   });
@@ -55,6 +79,7 @@ export async function createTenantContainer(
       Binds: [
         `${spec.dataPath}:${env.TENANT_DATA_MOUNT_PATH}:rw`,
         `${spec.envFilePath}:${env.TENANT_ENV_MOUNT_PATH}:ro`,
+        `${spec.backupPath}:${env.TENANT_BACKUP_MOUNT_PATH}:rw`,
       ],
       NetworkMode: spec.network,
       RestartPolicy: { Name: "unless-stopped" },

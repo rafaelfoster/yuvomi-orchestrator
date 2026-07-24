@@ -12,6 +12,7 @@ import {
   startTenantContainer,
   stopTenantContainer,
   updateTenantImage as dockerUpdateImage,
+  ImagePullError,
   type TenantContainerSpec,
 } from "../docker/tenantContainer.js";
 import { inspectTenantContainer } from "../docker/inspect.js";
@@ -22,13 +23,23 @@ import type { TenantStatus } from "../db/enums.js";
 export class TenantError extends Error {
   constructor(
     message: string,
-    public code: "SUBDOMAIN_TAKEN" | "NOT_FOUND" | "INVALID_STATE",
+    public code: "SUBDOMAIN_TAKEN" | "NOT_FOUND" | "INVALID_STATE" | "IMAGE_TAG_NOT_FOUND",
   ) {
     super(message);
   }
 }
 
 const SUBDOMAIN_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+
+// Re-thrown as a TenantError so route handlers map it to a clean 4xx instead
+// of the generic 500 an unrecognized error would get — a missing image tag
+// is a user input problem (bad tag picked/typed), not a server fault.
+function rethrowImagePullError(err: unknown, image: string, imageTag: string): never {
+  if (err instanceof ImagePullError && err.code === "NOT_FOUND") {
+    throw new TenantError(`image tag not found: ${image}:${imageTag}`, "IMAGE_TAG_NOT_FOUND");
+  }
+  throw err;
+}
 
 function sanitizeSubdomain(raw: string): string {
   const value = raw.trim().toLowerCase();
@@ -44,11 +55,15 @@ function paths(tenantId: string) {
     root,
     dataPath: path.join(root, "data"),
     envFilePath: path.join(root, ".env"),
+    // Separate root from TENANT_DATA_ROOT on purpose: Yuvomi's own BACKUP_DIR
+    // writes here directly (see writeTenantEnvFile below), independent of
+    // the orchestrator's own docker-exec sqlite backups under dataPath.
+    backupPath: path.join(env.TENANT_BACKUP_ROOT, tenantId),
   };
 }
 
 function toSpec(tenant: Tenant): TenantContainerSpec {
-  const { dataPath, envFilePath } = paths(tenant.id);
+  const { dataPath, envFilePath, backupPath } = paths(tenant.id);
   return {
     tenantId: tenant.id,
     containerName: tenant.containerName,
@@ -57,8 +72,48 @@ function toSpec(tenant: Tenant): TenantContainerSpec {
     imageTag: tenant.imageTag,
     dataPath,
     envFilePath,
+    backupPath,
     network: tenant.network,
   };
+}
+
+function tenantRuntimeEnv(): Record<string, string> {
+  // DB_PATH set explicitly: unset, Yuvomi defaults to "<app-root>/yuvomi.db"
+  // (i.e. inside /app, not the mounted volume) — root-owned and unwritable
+  // by the non-root user its entrypoint drops to, which crashes with
+  // SQLITE_CANTOPEN. Confirmed against the shipped image's server/db.js.
+  const dbPath = `${env.TENANT_DATA_MOUNT_PATH}/${env.TENANT_DB_FILENAME}`;
+  return {
+    NODE_ENV: "production",
+    DB_PATH: dbPath,
+    // Yuvomi's own internal backup scheduler defaults BACKUP_DIR to the
+    // relative "./backups", which resolves under its app-root working
+    // directory (root-owned, not chowned by the entrypoint) and fails with
+    // EACCES. Point it at the absolute "/backups" mount instead, which the
+    // entrypoint does chown to the non-root `node` user. See
+    // TENANT_BACKUP_MOUNT_PATH / TENANT_BACKUP_ROOT.
+    BACKUP_DIR: env.TENANT_BACKUP_MOUNT_PATH,
+    // Defaults the family to the orchestrator's SMTP relay when configured;
+    // tenant admins can still override from Yuvomi's own settings UI.
+    ...inheritedSmtpEnv(),
+  };
+}
+
+async function ensureTenantEnvFile(tenant: Tenant): Promise<void> {
+  const secrets = await prisma.tenantSecret.findUnique({ where: { tenantId: tenant.id } });
+  if (!secrets) throw new TenantError(`tenant secrets missing: ${tenant.id}`, "INVALID_STATE");
+  await writeTenantEnvFile(
+    paths(tenant.id).envFilePath,
+    {
+      dbEncryptionKey: secrets.dbEncryptionKey,
+      sessionSecret: secrets.sessionSecret,
+    },
+    tenantRuntimeEnv(),
+  );
+}
+
+export async function syncTenantRuntimeEnv(id: string): Promise<void> {
+  await ensureTenantEnvFile(await requireTenant(id));
 }
 
 export interface ProvisionTenantInput {
@@ -86,7 +141,7 @@ export async function provisionTenant(input: ProvisionTenantInput): Promise<Tena
   // are correct on the very first insert — avoids a placeholder value that
   // would collide under concurrent provisioning.
   const tenantId = randomUUID();
-  const { dataPath, envFilePath } = paths(tenantId);
+  const { dataPath, envFilePath, backupPath } = paths(tenantId);
 
   let tenant = await prisma.tenant.create({
     data: {
@@ -102,6 +157,7 @@ export async function provisionTenant(input: ProvisionTenantInput): Promise<Tena
       contactPhone: input.contactPhone,
       status: "PROVISIONING",
       dataPath,
+      backupPath,
     },
   });
 
@@ -113,19 +169,7 @@ export async function provisionTenant(input: ProvisionTenantInput): Promise<Tena
       sessionSecret: secrets.sessionSecret,
     },
   });
-  // DB_PATH set explicitly: unset, Yuvomi defaults to "<app-root>/yuvomi.db"
-  // (i.e. inside /app, not the mounted volume) — root-owned and unwritable
-  // by the non-root user its entrypoint drops to, which crashes with
-  // SQLITE_CANTOPEN. Confirmed against the shipped image's server/db.js.
-  const dbPath = `${env.TENANT_DATA_MOUNT_PATH}/${env.TENANT_DB_FILENAME}`;
-  await writeTenantEnvFile(envFilePath, secrets, {
-    NODE_ENV: "production",
-    DB_PATH: dbPath,
-    // Defaults the new family to the orchestrator's own SMTP relay; they
-    // can still override/reconfigure it from inside Yuvomi's own settings
-    // UI afterward — env only wins over Yuvomi's DB-stored config when set.
-    ...inheritedSmtpEnv(),
-  });
+  await writeTenantEnvFile(envFilePath, secrets, tenantRuntimeEnv());
 
   try {
     const containerId = await createTenantContainer(toSpec(tenant));
@@ -136,7 +180,7 @@ export async function provisionTenant(input: ProvisionTenantInput): Promise<Tena
     });
   } catch (err) {
     await prisma.tenant.update({ where: { id: tenant.id }, data: { status: "UNHEALTHY" } });
-    throw err;
+    rethrowImagePullError(err, tenant.image, tenant.imageTag);
   }
 
   await recordAudit({
@@ -178,6 +222,7 @@ export async function pauseTenant(id: string, actorId?: string): Promise<Tenant>
 export async function resumeTenant(id: string, actorId?: string): Promise<Tenant> {
   const tenant = await requireTenant(id);
   if (!tenant.containerId) throw new TenantError("tenant has no container", "INVALID_STATE");
+  await ensureTenantEnvFile(tenant);
 
   const state = await inspectTenantContainer(tenant.containerId);
   const containerId = state ? tenant.containerId : await createTenantContainer(toSpec(tenant));
@@ -209,8 +254,9 @@ export async function deleteTenant(
   }
 
   if (options.wipeData) {
-    const { root } = paths(tenant.id);
+    const { root, backupPath } = paths(tenant.id);
     await rm(root, { recursive: true, force: true });
+    await rm(backupPath, { recursive: true, force: true });
   }
 
   await prisma.tenant.delete({ where: { id } }); // cascades secrets/invites/schedules/backupLogs
@@ -231,6 +277,7 @@ export async function updateTenantImage(
 ): Promise<Tenant> {
   const tenant = await requireTenant(id);
   if (!tenant.containerId) throw new TenantError("tenant has no container", "INVALID_STATE");
+  await ensureTenantEnvFile(tenant);
 
   const nextTenant: Tenant = {
     ...tenant,
@@ -238,7 +285,12 @@ export async function updateTenantImage(
     imageTag: target.imageTag,
   };
 
-  const containerId = await dockerUpdateImage(toSpec(nextTenant), tenant.containerId);
+  let containerId: string;
+  try {
+    containerId = await dockerUpdateImage(toSpec(nextTenant), tenant.containerId);
+  } catch (err) {
+    rethrowImagePullError(err, nextTenant.image, nextTenant.imageTag);
+  }
 
   const updated = await prisma.tenant.update({
     where: { id },

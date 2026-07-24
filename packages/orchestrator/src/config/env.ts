@@ -53,6 +53,22 @@ const envSchema = z.object({
   // and the app can't write to it, which is why unset/wrong values here
   // produce SQLITE_CANTOPEN rather than a permissions error at our layer.
   TENANT_DATA_MOUNT_PATH: z.string().default("/data"),
+  // Host root dir containing one backups subfolder per tenant (mirrors
+  // TENANT_DATA_ROOT), bind-mounted per-tenant into TENANT_BACKUP_MOUNT_PATH.
+  // Same Docker-outside-of-Docker path-parity requirement as TENANT_DATA_ROOT:
+  // the orchestrator's own container must bind-mount this at the identical
+  // host path (see docker-compose.yml) for the hand-off to tenant containers
+  // to resolve.
+  TENANT_BACKUP_ROOT: z.string().min(1),
+  // Path inside the tenant container where its per-tenant backup folder is
+  // mounted, and the value written to its BACKUP_DIR env var. Must be
+  // exactly "/backups" (the shipped image's entrypoint only chowns
+  // /data, /backups, and /app/modules to the non-root `node` user before
+  // dropping privileges — Yuvomi's own internal backup scheduler defaults
+  // BACKUP_DIR to the relative "./backups", which resolves under its
+  // app-root working directory and stays root-owned/unwritable unless
+  // this is set to the absolute chowned path instead).
+  TENANT_BACKUP_MOUNT_PATH: z.string().default("/backups"),
   // Directory (shared with the Traefik container via a volume) where one
   // route file per tenant is written/removed — see src/docker/traefikRoute.ts.
   // Must be the SAME flat directory Traefik's file provider watches
@@ -73,8 +89,11 @@ const envSchema = z.object({
   INVITE_BASE_URL: z.string().url(),
   INVITE_TOKEN_TTL_HOURS: z.coerce.number().default(48),
 
+  // Reconciles the admin UI's BackupLog with whatever Yuvomi's own internal
+  // scheduler has already written to TENANT_BACKUP_ROOT — see
+  // src/backups/service.ts. Retention itself is governed by Yuvomi's own
+  // BACKUP_KEEP (tenants/service.ts's tenantRuntimeEnv), not here.
   BACKUP_CRON: z.string().default("0 4 * * *"),
-  BACKUP_RETENTION_DAYS: z.coerce.number().default(14),
   // Filename of the SQLCipher database inside the tenant's data mount.
   // Adjust to match Yuvomi's actual on-disk filename.
   TENANT_DB_FILENAME: z.string().default("yuvomi.db"),

@@ -11,6 +11,7 @@ const defaults: Record<string, string> = {
   WEBAUTHN_RP_NAME: "Yuvomi Orchestrator Test",
   WEBAUTHN_ORIGIN: "https://admin.families.test",
   TENANT_DATA_ROOT: "/tmp/yuvomi-test-tenants",
+  TENANT_BACKUP_ROOT: "/tmp/yuvomi-test-tenant-backups",
   TENANT_DEFAULT_IMAGE: "ghcr.io/ulsklyc/yuvomi:latest",
   TENANT_NETWORK: "yuvomi_edge_test",
   INVITE_BASE_URL: "https://admin.families.test/activate",

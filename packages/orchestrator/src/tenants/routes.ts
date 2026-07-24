@@ -20,9 +20,10 @@ import type { AuthedRequest } from "../middleware/requireAuth.js";
 export const tenantsRouter = Router();
 tenantsRouter.use(requireAuth);
 
-function handleTenantError(err: unknown, res: import("express").Response): boolean {
+export function handleTenantError(err: unknown, res: import("express").Response): boolean {
   if (err instanceof TenantError) {
-    const status = err.code === "NOT_FOUND" ? 404 : err.code === "SUBDOMAIN_TAKEN" ? 409 : 400;
+    const status =
+      err.code === "NOT_FOUND" || err.code === "IMAGE_TAG_NOT_FOUND" ? 404 : err.code === "SUBDOMAIN_TAKEN" ? 409 : 400;
     res.status(status).json({ error: err.message, code: err.code });
     return true;
   }

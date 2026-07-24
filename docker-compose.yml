@@ -137,6 +137,9 @@ services:
       # those exact host paths into tenant containers. Path parity is
       # required for that hand-off to work (Docker-outside-of-Docker).
       - ${TENANT_DATA_ROOT:-/srv/yuvomi/tenants}:${TENANT_DATA_ROOT:-/srv/yuvomi/tenants}
+      # Same path-parity requirement as TENANT_DATA_ROOT above, for the
+      # per-tenant backup folders bind-mounted into each tenant container.
+      - ${TENANT_BACKUP_ROOT:-/srv/yuvomi/tenant-backups}:${TENANT_BACKUP_ROOT:-/srv/yuvomi/tenant-backups}
 
   # --- Admin console frontend ---------------------------------------------
 
