@@ -4,8 +4,9 @@ import { releasesApi, type ReleaseInfo } from "../api/client";
 export const LATEST_TAG = "latest";
 
 /** Fetches the cached Yuvomi release list once per mount; "latest" is always offered alongside it. */
-export function useReleaseTags(): { releases: ReleaseInfo[]; loading: boolean } {
+export function useReleaseTags(): { releases: ReleaseInfo[]; loading: boolean; noPublishedVersions: boolean } {
   const [releases, setReleases] = useState<ReleaseInfo[]>([]);
+  const [noPublishedVersions, setNoPublishedVersions] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -13,7 +14,9 @@ export function useReleaseTags(): { releases: ReleaseInfo[]; loading: boolean } 
     releasesApi
       .list()
       .then((res) => {
-        if (!cancelled) setReleases(res.releases);
+        if (cancelled) return;
+        setReleases(res.releases);
+        setNoPublishedVersions(res.status === "no_published_versions");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -23,5 +26,5 @@ export function useReleaseTags(): { releases: ReleaseInfo[]; loading: boolean } 
     };
   }, []);
 
-  return { releases, loading };
+  return { releases, loading, noPublishedVersions };
 }

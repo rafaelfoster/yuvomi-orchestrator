@@ -1,0 +1,10 @@
+node_modules
+**/node_modules
+**/dist
+.git
+# Live tenant/backup data (TENANT_DATA_ROOT / TENANT_BACKUP_ROOT default to
+# ./data when run outside a bind-mounted host path). Per-tenant dirs are
+# root-owned 0700 (see src/tenants/secrets.ts), so a non-root build even
+# just *reading* them to tar the build context fails outright — and there
+# is never a reason to ship live tenant data inside an image layer.
+data

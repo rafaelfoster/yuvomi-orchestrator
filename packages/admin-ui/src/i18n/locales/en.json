@@ -167,6 +167,8 @@
     "updateNow": "Update now",
     "updating": "Updating…",
     "imageUpdateError": "Failed to update image",
+    "imageTagNotFound": "Selected version is not published as a container image.",
+    "noPublishedVersions": "No published image versions available right now.",
     "invitesTitle": "Onboarding invites",
     "invitesSub": "First access for the family's admin",
     "channel": "Channel",

@@ -139,8 +139,13 @@ export interface ReleaseInfo {
   prerelease: boolean;
 }
 
+export type ReleasesStatus = "ok" | "no_published_versions";
+
 export const releasesApi = {
-  list: () => api.get<{ fetchedAt: string; releases: ReleaseInfo[] }>("/releases").then((r) => r.data),
+  list: () =>
+    api
+      .get<{ fetchedAt: string; releases: ReleaseInfo[]; status: ReleasesStatus }>("/releases")
+      .then((r) => r.data),
 };
 
 export const authApi = {

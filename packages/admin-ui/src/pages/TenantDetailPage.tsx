@@ -10,7 +10,7 @@ import {
   type Invite,
   type Tenant,
 } from "../api/client";
-import { extractApiError } from "../hooks/useFleetData";
+import { extractApiError, getApiErrorCode } from "../hooks/useFleetData";
 import { LATEST_TAG, useReleaseTags } from "../hooks/useReleaseTags";
 import { formatBytes, formatDateTime, timeAgo } from "../lib/format";
 import { healthKey, healthMeta } from "../lib/status";
@@ -293,7 +293,7 @@ function InfoCard({ label, value, mono, accessory }: { label: string; value: str
 
 function ImageUpdateCard({ tenantId, currentImage, onUpdated }: { tenantId: string; currentImage: string; onUpdated: () => void }) {
   const { t } = useTranslation();
-  const { releases } = useReleaseTags();
+  const { releases, noPublishedVersions } = useReleaseTags();
   const [image, setImage] = useState(currentImage);
   const [imageTag, setImageTag] = useState("");
   const [busy, setBusy] = useState(false);
@@ -308,7 +308,11 @@ function ImageUpdateCard({ tenantId, currentImage, onUpdated }: { tenantId: stri
       setImageTag("");
       onUpdated();
     } catch (err) {
-      setError(extractApiError(err, t("tenantDetail.imageUpdateError")));
+      const message =
+        getApiErrorCode(err) === "IMAGE_TAG_NOT_FOUND"
+          ? t("tenantDetail.imageTagNotFound")
+          : extractApiError(err, t("tenantDetail.imageUpdateError"));
+      setError(message);
     } finally {
       setBusy(false);
     }
@@ -339,6 +343,7 @@ function ImageUpdateCard({ tenantId, currentImage, onUpdated }: { tenantId: stri
               </option>
             ))}
           </select>
+          {noPublishedVersions && <p className="mt-1.5 text-xs text-slate-500">{t("tenantDetail.noPublishedVersions")}</p>}
         </div>
         {error && <p className="text-sm text-red-400">{error}</p>}
         <button type="submit" disabled={busy} className="btn-primary">

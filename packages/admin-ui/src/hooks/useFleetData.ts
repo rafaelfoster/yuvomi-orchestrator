@@ -44,6 +44,11 @@ export function getHttpStatus(err: unknown): number | undefined {
   return (err as { response?: { status?: number } }).response?.status;
 }
 
+/** Backend error `code` (e.g. "IMAGE_TAG_NOT_FOUND"), if the response carries one. */
+export function getApiErrorCode(err: unknown): string | undefined {
+  return (err as { response?: { data?: { code?: string } } }).response?.data?.code;
+}
+
 async function fetchFleet(): Promise<FleetData> {
   const [tenants, schedules] = await Promise.all([tenantsApi.list(), schedulesApi.list()]);
 

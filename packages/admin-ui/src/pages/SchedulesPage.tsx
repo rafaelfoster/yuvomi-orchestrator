@@ -160,7 +160,7 @@ function CreateScheduleModal({
   onCreated: () => void;
 }) {
   const { t } = useTranslation();
-  const { releases } = useReleaseTags();
+  const { releases, noPublishedVersions } = useReleaseTags();
   const [type, setType] = useState<"UPDATE" | "RESTART">("UPDATE");
   const [tenantId, setTenantId] = useState("");
   const [targetImageRepo, setTargetImageRepo] = useState("ghcr.io/ulsklyc/yuvomi");
@@ -242,6 +242,7 @@ function CreateScheduleModal({
                   </option>
                 ))}
               </select>
+              {noPublishedVersions && <p className="mt-1.5 text-xs text-slate-500">{t("tenantDetail.noPublishedVersions")}</p>}
             </div>
           </div>
         )}
