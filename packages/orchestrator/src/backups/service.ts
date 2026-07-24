@@ -80,6 +80,13 @@ export async function runBackupForAllTenants(): Promise<void> {
   }
 }
 
+// Reconciles on every read, not just on BACKUP_CRON's once-a-day tick —
+// Yuvomi's own scheduler writes files on its own schedule (default 2am,
+// independent of BACKUP_CRON), and admins triggering an on-demand backup
+// from inside Yuvomi itself should see it in this UI immediately, not up
+// to a day later. Cheap: a readdir + a few stat calls on a small directory.
 export async function listBackupsForTenant(tenantId: string) {
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+  if (tenant) await runBackupForTenant(tenant);
   return prisma.backupLog.findMany({ where: { tenantId }, orderBy: { startedAt: "desc" } });
 }
