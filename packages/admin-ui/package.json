@@ -21,7 +21,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-i18next": "^17.0.10",
-    "react-router-dom": "^6.26.1"
+    "react-router-dom": "^6.30.6"
   },
   "devDependencies": {
     "@types/d3": "^7.4.3",
